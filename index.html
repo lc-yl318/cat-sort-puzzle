@@ -1,0 +1,2567 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Jelly Cats · 猫咪果冻排序</title>
+<style>
+  * {
+    box-sizing: border-box;
+    margin: 0;
+    padding: 0;
+    -webkit-tap-highlight-color: transparent;
+    touch-action: manipulation;
+  }
+  body {
+    min-height: 100vh;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    background: linear-gradient(160deg, #151d30 0%, #101828 48%, #0a0f1d 100%);   /* 暗夜蓝：衬出糖果色猫咪 */
+    font-family: -apple-system, "PingFang SC", "Microsoft YaHei", sans-serif;
+    color: #f0e4ee;
+    user-select: none;
+    padding: 20px;
+    overflow-x: hidden;
+  }
+
+  /* ========== 标题 ========== */
+  .title {
+    font-size: 30px;
+    font-weight: 800;
+    letter-spacing: 3px;
+    color: #ffd9e8;                    /* 浅粉白，压在暗夜蓝上 */
+    text-shadow: 0 3px 14px rgba(0,0,0,0.55), 0 0 22px rgba(255,150,190,0.25);
+    text-align: center;
+  }
+  .title span {
+    display: block;
+    margin-top: 6px;
+    font-size: 13px;
+    font-weight: 400;
+    letter-spacing: 10px;
+    text-indent: 10px; /* 抵消最后一个字符的 letter-spacing，保证视觉居中 */
+    color: rgba(240,220,235,0.6);
+  }
+
+  /* ========== 关卡状态栏 ========== */
+  .level-bar {
+    margin-top: 6px;
+    display: inline-block;
+    padding: 4px 14px;
+    border-radius: 20px;
+    background: rgba(255,255,255,0.08);
+    border: 1px solid rgba(255,255,255,0.12);
+    font-size: 12px;
+    font-weight: 500;
+    letter-spacing: 1px;
+    color: #ffcfe0;
+    text-shadow: 0 0 6px rgba(255, 140, 180, 0.35);
+    backdrop-filter: blur(4px);
+    -webkit-backdrop-filter: blur(4px);
+    transition: color 0.3s ease, background 0.3s ease, border-color 0.3s ease;
+  }
+  .level-bar.hard {
+    background: rgba(255, 120, 60, 0.12);
+    border-color: rgba(255, 140, 80, 0.25);
+    color: #ffb27a;
+    text-shadow: 0 0 8px rgba(255, 120, 60, 0.45);
+  }
+  /* 困难模式 · 剩余步数 ≤ 5 的压迫感：红色 + 心跳脉冲 */
+  .level-bar.danger {
+    background: rgba(255, 70, 90, 0.18);
+    border-color: rgba(255, 90, 110, 0.40);
+    color: #ff7a8a;
+    text-shadow: 0 0 10px rgba(255, 70, 90, 0.65);
+    animation: pulse 0.9s ease-in-out infinite;
+  }
+  @keyframes pulse {
+    0%, 100% { transform: scale(1); }
+    50%      { transform: scale(1.06); }
+  }
+
+  /* 实时星级进度条：亮星金色发光、暗星灰色低对比 */
+  .star-meter {
+    display: inline-block;
+    letter-spacing: 2px;
+    font-size: 15px;
+    margin-left: 4px;
+    vertical-align: middle;
+  }
+  .star-meter .star-on {
+    color: #ffd24d;
+    text-shadow: 0 0 6px rgba(255, 210, 77, 0.65),
+                 0 0 14px rgba(255, 180, 60, 0.35);
+    transition: all 0.25s ease;
+  }
+  .star-meter .star-off {
+    color: rgba(255, 255, 255, 0.22);
+    text-shadow: none;
+    transition: all 0.25s ease;
+  }
+
+  /* ========== 试管容器 ========== */
+  .tube-row {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 24px;
+    justify-content: center;
+    align-items: flex-end;
+    min-height: 220px;
+    padding: 24px 20px;
+  }
+
+  /* ========== 试管：磨砂玻璃罐 ========== */
+  .tube {
+    width: 56px;
+    height: 204px;
+    border: none;                                   /* 去掉生硬边框 */
+    border-radius: 14px 14px 24px 24px;             /* 圆润的罐底 */
+    background: rgba(255, 255, 255, 0.08);          /* 磨砂底色（暗夜下压暗，让猫咪更显眼） */
+    backdrop-filter: blur(8px);                     /* 磨砂玻璃核心 */
+    -webkit-backdrop-filter: blur(8px);
+    position: relative;
+    cursor: pointer;
+    display: flex;
+    flex-direction: column-reverse;
+    gap: 2px;                                       /* 果冻块之间 2px 微小间距 */
+    padding-top: 10px;                              /* 顶部留出果冻上浮空间 */
+    overflow: hidden;
+    /* 多层阴影：内高光 + 内壁反光 + 底部柔光 + 外部投影（暗夜下外投影回归深黑） */
+    box-shadow:
+      inset 0 1px 0 rgba(255,255,255,0.45),         /* 罐口内高光 */
+      inset 3px 0 6px rgba(255,255,255,0.18),       /* 左内壁反光 */
+      inset -3px 0 6px rgba(255,255,255,0.18),      /* 右内壁反光 */
+      inset 0 -10px 18px rgba(255,255,255,0.08),    /* 罐底内柔光 */
+      inset 0 0 0 1px rgba(255,255,255,0.22),       /* 细内描边：罐身轮廓 */
+      0 2px 6px rgba(0,0,0,0.30),                   /* 近距离投影 */
+      0 12px 28px rgba(0,0,0,0.45);                 /* 远距离悬浮投影 */
+    transition: transform 0.15s ease, box-shadow 0.15s ease, filter 0.25s ease;
+  }
+
+  /* 视觉焦点：选中后，非选中且不可接收的试管压暗 30%，
+     视线自动被引导到"能操作的管子"上，用视觉焦点代替思考 */
+  .tube.dimmed { filter: brightness(0.7); }
+
+  /* 选中态下"可接收"目标管：呼吸发光引导，玩家一眼就知道能倒到哪 */
+  .tube.can-receive { animation: canBreathe 1.2s ease-in-out infinite; }
+  @keyframes canBreathe {
+    0%, 100% {
+      box-shadow:
+        0 0 0 2px rgba(255,255,255,0.35),
+        0 0 18px rgba(255,255,255,0.15),
+        inset 0 1px 0 rgba(255,255,255,0.55),
+        inset 3px 0 6px rgba(255,255,255,0.22),
+        inset -3px 0 6px rgba(255,255,255,0.22),
+        inset 0 -10px 18px rgba(255,255,255,0.10),
+        inset 0 0 0 1px rgba(255,255,255,0.28),
+        0 2px 6px rgba(0,0,0,0.30),
+        0 12px 28px rgba(0,0,0,0.45);
+    }
+    50% {
+      box-shadow:
+        0 0 0 2px rgba(255,255,255,0.75),
+        0 0 38px rgba(255,255,255,0.35),
+        inset 0 1px 0 rgba(255,255,255,0.55),
+        inset 3px 0 6px rgba(255,255,255,0.22),
+        inset -3px 0 6px rgba(255,255,255,0.22),
+        inset 0 -10px 18px rgba(255,255,255,0.10),
+        inset 0 0 0 1px rgba(255,255,255,0.28),
+        0 2px 6px rgba(0,0,0,0.30),
+        0 12px 28px rgba(0,0,0,0.45);
+    }
+  }
+  /* 玻璃表面竖向高光条（画在果冻之上，模拟玻璃反光） */
+  .tube::before {
+    content: '';
+    position: absolute;
+    top: 5%; left: 7px;
+    width: 5px; height: 85%;
+    background: linear-gradient(180deg,
+      rgba(255,255,255,0.55) 0%,
+      rgba(255,255,255,0.12) 50%,
+      rgba(255,255,255,0.28) 100%);
+    border-radius: 3px;
+    pointer-events: none;
+    z-index: 10;
+  }
+  /* 罐底弧面阴影，增强圆润体积感 */
+  .tube::after {
+    content: '';
+    position: absolute;
+    bottom: 0; left: 0; right: 0;
+    height: 14px;
+    background: radial-gradient(ellipse at center, rgba(0,0,0,0.22) 0%, transparent 70%);
+    pointer-events: none;
+    z-index: 10;
+  }
+
+  /* 悬停：轻微上浮 + 柔和白光 */
+  .tube:hover {
+    transform: translateY(-5px);
+    box-shadow:
+      inset 0 1px 0 rgba(255,255,255,0.5),
+      inset 3px 0 6px rgba(255,255,255,0.2),
+      inset -3px 0 6px rgba(255,255,255,0.2),
+      inset 0 -10px 18px rgba(255,255,255,0.12),
+      0 2px 6px rgba(0,0,0,0.18),
+      0 16px 34px rgba(0,0,0,0.3),
+      0 0 18px rgba(255,255,255,0.18);
+  }
+
+  /* 选中：白色光环 + 整体上浮 */
+  .tube.selected {
+    transform: translateY(-12px);
+    box-shadow:
+      0 0 0 2px rgba(255,255,255,0.55),
+      0 0 30px rgba(255,255,255,0.28),
+      inset 0 1px 0 rgba(255,255,255,0.5),
+      inset 3px 0 6px rgba(255,255,255,0.2),
+      inset -3px 0 6px rgba(255,255,255,0.2),
+      inset 0 -10px 18px rgba(255,255,255,0.12),
+      0 18px 36px rgba(0,0,0,0.32);
+  }
+
+  /* 选中试管：顶部果冻 Q 弹拉伸（Squash & Stretch）
+     快速压扁 → 瞬间拉伸回弹 → 恢复并保持悬浮，阻尼曲线带来 Q 弹感 */
+  .tube.selected .layer.picked {
+    transform-origin: 50% 100%;
+    animation: jellyPick 0.38s cubic-bezier(0.175, 0.885, 0.32, 1.275) forwards;
+  }
+  @keyframes jellyPick {
+    0%   { transform: translateY(0)    scale(1, 1); }
+    30%  { transform: translateY(-2px) scale(1.2, 0.8); }   /* 快速压扁 */
+    65%  { transform: translateY(-9px) scale(0.9, 1.1); }   /* 瞬间拉伸回弹 */
+    100% { transform: translateY(-6px) scale(1, 1); }        /* 恢复悬浮 */
+  }
+
+  /* 点击按压反馈：干脆的缩放 */
+  .tube:active {
+    transform: scale(0.92);
+    transition: transform 0.05s ease-out;
+  }
+
+  /* 快满提示：轻微抖动 */
+  .tube.almost-full {
+    animation: fullBounce 0.5s ease;
+  }
+
+  /* 快满抖动 */
+  @keyframes fullBounce {
+    0%, 100% { transform: translateY(0); }
+    50% { transform: translateY(-3px); }
+  }
+
+  /* 关卡入场：试管从下方滑上来，带弹簧过冲 */
+  @keyframes tubeEnter {
+    from { transform: translateY(46px) scale(.75); opacity: 0; }
+    to   { transform: translateY(0)    scale(1);    opacity: 1; }
+  }
+
+  /* 通关金色光晕：用 filter:drop-shadow 叠在试管原有 box-shadow 之上，
+     不参与布局、不会覆盖试管玻璃质感的原有阴影 */
+  .tube.gold-glow {
+    animation: goldGlow 1s ease-out forwards;
+  }
+  @keyframes goldGlow {
+    0%, 100% { filter: none; }
+    35% {
+      filter:
+        drop-shadow(0 0 0 rgba(255,215,0,0))
+        drop-shadow(0 0 12px rgba(255,215,0,0.9))
+        drop-shadow(0 0 26px rgba(255,180,40,0.5));
+    }
+  }
+
+  /* 错误状态：红色光环绕 + 果冻扭曲晃动（skewX + rotate + scale 组合，
+     像果冻被弹了一下，而不是生硬的左右平移）。
+     注意：必须写在 .almost-full 之后——两者优先级相同，后写的规则生效，
+     这样快满试管报错时，扭曲晃动不会被快满抖动动画覆盖 */
+  .tube.error {
+    transform-origin: 50% 100%;
+    animation: jellyWobble 0.48s ease;
+    box-shadow:
+      0 0 0 2px rgba(255,71,87,0.7),
+      0 0 24px rgba(255,71,87,0.45),
+      inset 0 1px 0 rgba(255,255,255,0.45),
+      inset 3px 0 6px rgba(255,255,255,0.18),
+      inset -3px 0 6px rgba(255,255,255,0.18),
+      0 12px 28px rgba(0,0,0,0.25);
+  }
+  @keyframes jellyWobble {
+    0%   { transform: scale(1, 1)      skewX(0deg)    rotate(0deg); }
+    20%  { transform: scale(1.06, 0.94) skewX(-6deg)  rotate(-2deg); }
+    45%  { transform: scale(0.95, 1.06) skewX(5deg)   rotate(2.5deg); }
+    70%  { transform: scale(1.03, 0.98) skewX(-2.5deg) rotate(-1.2deg); }
+    100% { transform: scale(1, 1)      skewX(0deg)    rotate(0deg); }
+  }
+
+  /* 落地缓冲：多次递减振荡，像果冻砸到桌面会弹好几下 */
+  .tube.squash .layer {
+    transform-origin: 50% 100%;
+    animation: jellySquash 0.55s cubic-bezier(0.175, 0.885, 0.32, 1.275);
+  }
+  @keyframes jellySquash {
+    0%   { transform: scale(1, 1); }
+    20%  { transform: scale(1.12, 0.85); }   /* 猛压 */
+    40%  { transform: scale(0.93, 1.08); }   /* 弹高 */
+    58%  { transform: scale(1.05, 0.95); }   /* 再压（幅度减半） */
+    74%  { transform: scale(0.97, 1.04); }   /* 再弹 */
+    88%  { transform: scale(1.01, 0.99); }   /* 微晃 */
+    100% { transform: scale(1, 1); }
+  }
+
+  /* ========== 果冻块：猫咪 PNG（透明背景，JS 按颜色拼 URL）========== */
+  .layer {
+    width: 100%;
+    height: calc(25% - 2px);        /* 容量 4，扣除块间距，恰好铺满 */
+    position: relative;
+    transition: all 0.1s ease-out;
+    /* 表情层居中 */
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    /* drop-shadow 跟随 PNG alpha 轮廓，只保留一层黑色下落投影 */
+    filter: drop-shadow(0 3px 4px rgba(0,0,0,0.40));
+    /* 极缓慢呼吸缩放：让静止的猫咪也像在活，幅度 1.5%，周期 4s */
+    animation: jellyBreathe 4s ease-in-out infinite alternate;
+    transform-origin: 50% 100%;
+  }
+  /* 落地 squash 时关闭呼吸：jellySquash 有自己的 keyframes，避免冲突。
+     注意：选中态的 picked 不需要在这里关呼吸——.tube.selected .layer.picked
+     优先级更高，它的 jellyPick 声明本身就会覆盖 .layer 的 breathe */
+  .tube.squash .layer { animation: none; }
+  @keyframes jellyBreathe {
+    from { transform: scaleY(1); }
+    to   { transform: scaleY(1.02); }    /* 1.02 很轻微，不抢戏 */
+  }
+
+  /* 深色调单独补偿：blue/green/purple 在暗夜背景上对比度不够，
+     加一层 1px 硬白描边勾轮廓（只勾不糊）+ 轻微提亮跳出背景 */
+  .layer.blue, .layer.green, .layer.purple {
+    filter:
+      brightness(1.08)
+      drop-shadow(0 0 1px rgba(255,255,255,1))
+      drop-shadow(0 3px 4px rgba(0,0,0,0.40));
+  }
+
+  /* 果冻正中的 •ω• 表情：绝对居中叠在图片上 */
+  .layer .face {
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    transform: translate(-50%, -50%);
+    font-family: monospace;   /* 等宽字体保证笑脸不歪 */
+    font-size: 16px;
+    font-weight: 900;         /* 让黑点更明显 */
+    color: #111;
+    opacity: 0.85;
+    /* 关键：禁止换行！眼/嘴拆成 inline-block 后各自度量取整，
+       总宽比整行文本宽不到 1px，收缩适应放不下会把右眼挤到第二行（整张脸歪掉） */
+    white-space: nowrap;
+    text-shadow:
+      0 0 4px rgba(255,255,255,0.95),
+      0 0 10px rgba(255,255,255,0.55);
+    pointer-events: none;
+    user-select: none;
+    /* 提前提升为合成层：眼神跟随只改子元素的 transform，避免每次偏移触发重绘 */
+    will-change: transform;
+  }
+
+  /* 跟随光标的结构：.finner 包住整张脸（眼+嘴）一起微移，表情不散架；
+     .eye 再叠一点点"视线领先"。两层都要 inline-block 才能吃 transform */
+  .layer .face .finner {
+    display: inline-block;
+    transition: transform 0.15s ease-out;
+    will-change: transform;
+  }
+  .layer .face .eye {
+    display: inline-block;
+    transition: transform 0.12s ease-out;
+    will-change: transform;
+  }
+
+  /* 爱心眼：长按触发后，顶部果冻的表情变 ♥ω♥，
+     同时颜色转为粉红 + 发光，搭配一次轻微弹跳 */
+  .layer .face.love {
+    color: #ff4d7a;
+    opacity: 1;
+    text-shadow:
+      0 0 3px rgba(255,255,255,1),
+      0 0 10px rgba(255, 77, 122, 0.9),
+      0 0 20px rgba(255, 77, 122, 0.55);
+    animation: lovePop 0.25s ease-out;
+    font-size: 18px;     /* ♥ 字符比 • 稍大，略放大补偿 */
+  }
+  @keyframes lovePop {
+    0%   { transform: translate(-50%, -50%) scale(0.7); }
+    60%  { transform: translate(-50%, -50%) scale(1.25); }
+    100% { transform: translate(-50%, -50%) scale(1); }
+  }
+
+  /* 眨眼（进阶版）：选中期间每 3 秒眨一次，带歪头与肉感挤压 */
+  .tube.selected .layer.picked .face {
+    animation: catBlink 3s infinite ease-in-out;
+  }
+  @keyframes catBlink {
+    /* transform 里必须带上 translate(-50%,-50%)，否则会覆盖 .face 的绝对居中定位 */
+    0%        { transform: translate(-50%, -50%) scale(1) rotate(0deg); }
+    3%, 7%    { transform: translate(-50%, -50%) scale(1.1, 0.1) rotate(-3deg); }
+    11%       { transform: translate(-50%, -50%) scale(1.05, 0.8) rotate(2deg); }
+    16%, 86%  { transform: translate(-50%, -50%) scale(1) rotate(0deg); }
+    90%, 94%  { transform: translate(-50%, -50%) scale(1.1, 0.1) rotate(-3deg); }
+    96%       { transform: translate(-50%, -50%) scale(1.05, 0.8) rotate(2deg); }
+    100%      { transform: translate(-50%, -50%) scale(1) rotate(0deg); }
+  }
+
+  /* 错峰眨眼：一管最多 4 块，从上到下依次延迟，避免整排同步像机器人。
+     picked 块恒为试管末尾连续几块，故用 nth-last-child 从顶部往下数 */
+  .tube.selected .layer.picked:nth-last-child(2) .face { animation-delay: 0.2s; }
+  .tube.selected .layer.picked:nth-last-child(3) .face { animation-delay: 0.4s; }
+  .tube.selected .layer.picked:nth-last-child(4) .face { animation-delay: 0.6s; }
+
+  /* 飞行中的果冻克隆体：脱离文档流，跟随抛物线轨迹。
+     transition:none 必须显式写——.layer 基类的 transition:all 0.1s 会让克隆体的
+     transform 从 (0,0) 匀速过渡到起点，肉眼就是"左上角闪一下果冻"；
+     left/top 由 JS 设为源管位置（布局属性，动画未生效时也画在正确位置）；
+     不使用 will-change（WAAPI 自带合成层，提前提升反而制造抢画竞态） */
+  .layer.fly {
+    position: fixed;
+    left: 0; top: 0;
+    z-index: 150;
+    pointer-events: none;
+    transition: none !important;
+  }
+
+  /* 每种颜色一条纵向渐变：只保留给落地粒子（.particle）上色用，
+     果冻本体已改用 cat/ 下的猫咪 PNG，不再消费 --jelly */
+  .red    { --jelly: linear-gradient(180deg, rgba(255,205,205,0.94) 0%, rgba(255,110,110,0.92) 45%, rgba(236,74,74,0.97) 100%); }
+  .blue   { --jelly: linear-gradient(180deg, rgba(198,220,255,0.94) 0%, rgba(96,158,255,0.92) 45%, rgba(62,127,240,0.97) 100%); }
+  .green  { --jelly: linear-gradient(180deg, rgba(205,255,224,0.94) 0%, rgba(124,247,186,0.92) 45%, rgba(72,208,130,0.97) 100%); }
+  .yellow { --jelly: linear-gradient(180deg, rgba(255,252,205,0.95) 0%, rgba(255,242,116,0.93) 45%, rgba(240,210,32,0.97) 100%); }
+  .purple { --jelly: linear-gradient(180deg, rgba(250,196,255,0.94) 0%, rgba(232,110,255,0.92) 45%, rgba(196,60,225,0.97) 100%); }
+  .orange { --jelly: linear-gradient(180deg, rgba(255,224,170,0.94) 0%, rgba(255,184,72,0.92) 45%, rgba(240,152,24,0.97) 100%); }
+  .pink   { --jelly: linear-gradient(180deg, rgba(255,224,236,0.94) 0%, rgba(249,164,193,0.92) 45%, rgba(230,128,170,0.97) 100%); }
+
+  /* ========== 底部按钮：三枚 Q 弹果冻糖 ========== */
+  .controls { margin-top: 20px; display: flex; justify-content: center; flex-wrap: wrap; gap: 12px; }
+  .btn {
+    padding: 11px 36px;
+    font-size: 15px;
+    border: none;
+    border-radius: 999px;
+    cursor: pointer;
+    font-weight: 700;
+    letter-spacing: 2px;
+    /* 统一果冻过渡：弹簧缓动，transform 和 box-shadow 一起弹 */
+    transition: transform 0.25s cubic-bezier(0.175, 0.885, 0.32, 1.275),
+                box-shadow  0.25s cubic-bezier(0.175, 0.885, 0.32, 1.275),
+                background  0.25s ease,
+                filter      0.25s ease;
+    /* 所有果冻都有顶部白高光 + 底部深阴影，体积感靠内阴影不靠 border */
+    text-shadow: 0 1px 1px rgba(0,0,0,0.15);   /* 文字嵌在果冻里的微弱阴影 */
+  }
+  .btn:hover:not(:disabled) {
+    transform: translateY(-2px) scale(1.03, 0.97);   /* 上浮 + 横向微拉 */
+    filter: brightness(1.08);                          /* 亮一点点 */
+  }
+  .btn:active:not(:disabled) {
+    transform: scale(0.94, 0.88);   /* 果冻被按下去：竖向压扁更多，像软糖 */
+    filter: brightness(0.95);
+    transition-duration: 0.08s;     /* 按下去要快，抬起来弹回来 */
+  }
+
+  /* 主按钮：明黄色柠檬糖（已经是最饱满的，只补充果冻内阴影） */
+  .btn-primary {
+    background: linear-gradient(180deg, #ffe88a 0%, #ffd700 60%, #f0b800 100%);
+    color: #4a3800;
+    text-shadow: 0 1px 1px rgba(0,0,0,0.18), 0 0 0.5px rgba(255,255,255,0.6);
+    box-shadow:
+      0 0 0 1px rgba(255,220,0,0.5),
+      0 6px 16px rgba(255,200,0,0.45),
+      0 2px 4px rgba(0,0,0,0.2),
+      inset 0 2px 5px rgba(255,255,255,0.9),      /* 顶部白高光 */
+      inset 0 -4px 7px rgba(140,90,0,0.28),        /* 底部深阴影 */
+      inset 0 1px 0 rgba(255,255,255,0.7);         /* 细内描边感 */
+  }
+  .btn-primary:hover:not(:disabled) {
+    box-shadow:
+      0 0 0 1px rgba(255,220,0,0.65),
+      0 10px 26px rgba(255,200,0,0.55),
+      0 3px 6px rgba(0,0,0,0.25),
+      inset 0 2px 5px rgba(255,255,255,0.9),
+      inset 0 -4px 7px rgba(140,90,0,0.28),
+      inset 0 1px 0 rgba(255,255,255,0.7);
+  }
+
+  /* 撤销按钮：天空蓝薄荷糖 */
+  .btn-undo {
+    background: linear-gradient(180deg, #b8e4ff 0%, #6bb8ef 55%, #3a8fd0 100%);
+    color: #0e2a4a;
+    text-shadow: 0 1px 1px rgba(0,0,0,0.22), 0 0 0.5px rgba(255,255,255,0.55);
+    box-shadow:
+      0 0 0 1px rgba(120,190,230,0.55),
+      0 5px 14px rgba(60,140,200,0.35),
+      0 2px 4px rgba(0,0,0,0.2),
+      inset 0 2px 5px rgba(255,255,255,0.88),
+      inset 0 -4px 7px rgba(20,60,100,0.35),
+      inset 0 1px 0 rgba(255,255,255,0.65);
+    border: none;
+  }
+  .btn-undo:hover:not(:disabled) {
+    box-shadow:
+      0 0 0 1px rgba(120,190,230,0.7),
+      0 9px 22px rgba(60,140,200,0.48),
+      0 3px 6px rgba(0,0,0,0.25),
+      inset 0 2px 5px rgba(255,255,255,0.88),
+      inset 0 -4px 7px rgba(20,60,100,0.35),
+      inset 0 1px 0 rgba(255,255,255,0.65);
+  }
+  .btn-undo:disabled {
+    opacity: 0.4;
+    cursor: not-allowed;
+    filter: grayscale(0.4) brightness(0.75);
+    transform: none !important;
+  }
+
+  /* 选关按钮：草莓粉糖 */
+  .btn-secondary {
+    background: linear-gradient(180deg, #ffc5dc 0%, #f48bb5 55%, #d85591 100%);
+    color: #4a0a26;
+    text-shadow: 0 1px 1px rgba(0,0,0,0.22), 0 0 0.5px rgba(255,255,255,0.55);
+    box-shadow:
+      0 0 0 1px rgba(230,130,170,0.55),
+      0 5px 14px rgba(200,80,130,0.38),
+      0 2px 4px rgba(0,0,0,0.2),
+      inset 0 2px 5px rgba(255,255,255,0.88),
+      inset 0 -4px 7px rgba(120,20,60,0.35),
+      inset 0 1px 0 rgba(255,255,255,0.65);
+    border: none;
+  }
+  .btn-secondary:hover:not(:disabled) {
+    box-shadow:
+      0 0 0 1px rgba(230,130,170,0.7),
+      0 9px 22px rgba(200,80,130,0.5),
+      0 3px 6px rgba(0,0,0,0.25),
+      inset 0 2px 5px rgba(255,255,255,0.88),
+      inset 0 -4px 7px rgba(120,20,60,0.35),
+      inset 0 1px 0 rgba(255,255,255,0.65);
+  }
+
+  /* 选关面板（复用 win-overlay 磨砂玻璃材质） */
+  .level-picker {
+    position: fixed;
+    top: 0; left: 0; right: 0; bottom: 0;
+    background: rgba(12, 14, 30, 0.45);
+    backdrop-filter: blur(10px) saturate(160%);
+    -webkit-backdrop-filter: blur(10px) saturate(160%);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    z-index: 100;
+    animation: fadeIn 0.25s ease;
+  }
+  .level-picker-card {
+    background: rgba(255,255,255,0.14);
+    backdrop-filter: blur(14px);
+    -webkit-backdrop-filter: blur(14px);
+    border: 1px solid rgba(255,255,255,0.30);
+    padding: 32px 40px;
+    border-radius: 24px;
+    text-align: center;
+    box-shadow:
+      0 20px 60px rgba(0,0,0,0.45),
+      inset 0 1px 0 rgba(255,255,255,0.40),
+      inset 0 -14px 24px rgba(255,255,255,0.08);
+    animation: popIn 0.3s cubic-bezier(0.175, 0.885, 0.32, 1.275);
+    max-width: 340px;
+  }
+  .level-picker-card h3 {
+    font-size: 22px;
+    margin-bottom: 18px;
+    letter-spacing: 2px;
+    color: #ffd9e8;
+  }
+  .level-grid {
+    display: grid;
+    grid-template-columns: repeat(5, 1fr);
+    gap: 10px;
+    margin-bottom: 18px;
+  }
+  .level-btn {
+    width: 46px;
+    height: 46px;
+    border: 1px solid rgba(255,255,255,0.25);
+    border-radius: 12px;
+    background: rgba(255,255,255,0.10);
+    color: #ffd9e8;
+    font-size: 15px;
+    font-weight: 700;
+    cursor: pointer;
+    transition: transform 0.1s, background 0.15s, border-color 0.15s;
+  }
+  .level-btn:hover:not(:disabled) {
+    background: rgba(255,215,120,0.20);
+    border-color: rgba(255,215,120,0.50);
+    transform: translateY(-2px);
+  }
+  .level-btn.current {
+    background: linear-gradient(180deg, #ffe27a, #ffd700);
+    color: #333;
+    border-color: transparent;
+    box-shadow: 0 4px 12px rgba(255,215,0,0.35);
+  }
+  .level-btn:disabled {
+    opacity: 0.30;
+    cursor: not-allowed;
+  }
+  .btn-stars {
+    display: block;
+    font-size: 11px;
+    letter-spacing: 1px;
+    margin-top: 2px;
+    color: #ffd24d;
+    text-shadow: 0 0 6px rgba(255,210,77,0.5);
+  }
+  .level-picker-close {
+    background: rgba(255,255,255,0.14);
+    color: #ffd9e8;
+    border: 1px solid rgba(255,255,255,0.25);
+    padding: 8px 24px;
+    border-radius: 999px;
+    font-size: 13px;
+    cursor: pointer;
+  }
+  .level-picker-close:hover { background: rgba(255,255,255,0.22); }
+
+  /* ========== 通关弹窗：整屏磨砂玻璃 + 玻璃卡片 + 彩带 ==========
+     遮罩不再用压暗黑纱，而是和试管同一套材质语言：
+     rgba 半透明白 + backdrop-filter 模糊，让背后的果冻颜色透上来 */
+  .win-overlay {
+    position: fixed;
+    top: 0; left: 0; right: 0; bottom: 0;
+    background: rgba(12, 14, 30, 0.45);              /* 暗夜磨砂，呼应暗夜蓝底 */
+    backdrop-filter: blur(10px) saturate(160%);      /* 磨砂：模糊 + 提升色彩饱和 */
+    -webkit-backdrop-filter: blur(10px) saturate(160%);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    z-index: 100;
+    animation: fadeIn 0.3s ease;
+  }
+  .win-card {
+    background: rgba(255,255,255,0.14);
+    backdrop-filter: blur(14px);
+    -webkit-backdrop-filter: blur(14px);
+    border: 1px solid rgba(255,255,255,0.30);
+    padding: 38px 58px;
+    border-radius: 24px;
+    text-align: center;
+    text-shadow: 0 2px 10px rgba(0,0,0,0.5);          /* 浅玻璃底上保证浅色字可读 */
+    box-shadow:
+      0 20px 60px rgba(0,0,0,0.45),
+      inset 0 1px 0 rgba(255,255,255,0.40),          /* 上沿高光 */
+      inset 0 -14px 24px rgba(255,255,255,0.08);     /* 底部柔光 */
+    animation: popIn 0.4s cubic-bezier(0.175, 0.885, 0.32, 1.275);
+  }
+  .win-card h2 { font-size: 34px; margin-bottom: 10px; letter-spacing: 2px; }
+  .win-card p { font-size: 15px; opacity: 0.85; }
+
+  /* 首次进入的欢迎引导：沿用同一套磨砂玻璃语言，层级略高于通关/选关弹窗 */
+  .welcome-overlay { z-index: 105; }
+  .welcome-card { padding: 44px 56px; max-width: 86vw; }
+  .welcome-card .welcome-cat {
+    font-size: 30px;
+    letter-spacing: 1px;
+    margin-bottom: 12px;
+    white-space: nowrap;
+  }
+  .welcome-card .welcome-title { font-size: 20px; margin-bottom: 10px; } 
+  .welcome-card .welcome-sub { font-size: 15px; opacity: 0.88; line-height: 1.7; margin-bottom: 26px; }
+  /* 果冻按钮：糖果粉渐变 + 上沿高光 + 底部内阴影，按下压扁回弹 */
+  .jelly-btn {
+    display: inline-block;
+    padding: 15px 44px;
+    font-size: 19px;
+    font-weight: 700;
+    letter-spacing: 2px;
+    color: #5a2140;
+    border: none;
+    border-radius: 999px;
+    cursor: pointer;
+    background:
+      radial-gradient(circle at 30% 24%, rgba(255,255,255,0.78), transparent 46%),
+      linear-gradient(160deg, #ffb3d1, #ff7fb2 55%, #f05c97);
+    box-shadow:
+      0 10px 24px rgba(255,105,160,0.45),
+      inset 0 2px 0 rgba(255,255,255,0.65),
+      inset 0 -6px 14px rgba(180,40,95,0.28);
+    transition: transform 0.12s ease, box-shadow 0.12s ease;
+  }
+  .jelly-btn:hover { transform: translateY(-1px) scale(1.03); }
+  .jelly-btn:active {
+    transform: scale(0.93, 0.88);           /* 摁下去的果冻压扁感 */
+    box-shadow:
+      0 4px 12px rgba(255,105,160,0.35),
+      inset 0 2px 0 rgba(255,255,255,0.55),
+      inset 0 -3px 10px rgba(180,40,95,0.30);
+  }
+  .win-stars { font-size: 30px; letter-spacing: 6px; margin: 10px 0 6px; }
+  .win-stats {
+    display: flex; gap: 14px; justify-content: center;
+    font-size: 14px; color: #ffe9b0;
+  }
+  .win-thresholds { font-size: 12px; opacity: 0.7; margin: 4px 0 6px; letter-spacing: 1px; }
+  .win-history { font-size: 12px; opacity: 0.85; margin-top: 6px; }
+
+  @keyframes fadeIn { from { opacity: 0; } to { opacity: 1; } }
+  @keyframes popIn { from { transform: scale(0.5); opacity: 0; } to { transform: scale(1); opacity: 1; } }
+
+  /* 彩带 */
+  .confetti {
+    position: fixed;
+    width: 10px; height: 10px;
+    top: -20px;
+    z-index: 101;
+    animation: fall linear forwards;
+  }
+  @keyframes fall {
+    to { transform: translateY(110vh) rotate(720deg); opacity: 0; }
+  }
+
+  /* ========== 表现力增强：屏幕震动 / 粒子飞溅 / 动态背景 ========== */
+
+  /* 游戏主界面独立成层，叠在动态背景之上 */
+  #gameScreen {
+    position: relative;
+    z-index: 1;
+    text-align: center;   /* 让 collection / level-bar 内联块居中 */
+  }
+
+  /* 环境光反射：垫在游戏层下，选中果冻时屏幕边缘染上对应颜色，
+     0.35s 过渡让换色像光慢慢漫开，而不是生硬切换 */
+  #ambientGlow {
+    position: fixed;
+    inset: 0;
+    pointer-events: none;
+    z-index: 0;
+    box-shadow: inset 0 0 120px transparent;
+    transition: box-shadow 0.35s ease;
+  }
+
+  /* 屏幕震动：非法倒水、成功归类一管满色时触发。
+     --shake 控制振幅（报错 1、归类完成 0.55），让两种反馈力度可分 */
+  #gameScreen.shake {
+    animation: screenShake 0.42s cubic-bezier(0.36, 0.07, 0.19, 0.97);
+  }
+  @keyframes screenShake {
+    0%, 100% { transform: translate3d(0, 0, 0); }
+    12% { transform: translate3d(calc(-6px * var(--shake, 1)), calc(3px * var(--shake, 1)), 0); }
+    28% { transform: translate3d(calc(5px * var(--shake, 1)), calc(-4px * var(--shake, 1)), 0); }
+    45% { transform: translate3d(calc(-4px * var(--shake, 1)), calc(-2px * var(--shake, 1)), 0); }
+    62% { transform: translate3d(calc(3px * var(--shake, 1)), calc(3px * var(--shake, 1)), 0); }
+    80% { transform: translate3d(calc(-2px * var(--shake, 1)), calc(1px * var(--shake, 1)), 0); }
+    92% { transform: translate3d(calc(1px * var(--shake, 1)), calc(-1px * var(--shake, 1)), 0); }
+  }
+
+  /* 果冻落地飞溅的微小同色粒子（JS 动态创建，动画结束后自动移除） */
+  .particle {
+    position: fixed;
+    border-radius: 50%;
+    pointer-events: none;
+    z-index: 160;
+    background-image: var(--jelly);      /* 复用果冻色（颜色类只提供 --jelly） */
+    box-shadow: inset 0 1px 1px rgba(255,255,255,0.7);
+    will-change: transform, opacity;
+  }
+
+  /* 爱心粒子：♡ emoji 作为"猫咪被撸开心"的小反馈
+     粉色文字 + 柔和发光，固定定位 + Web Animations API 向上飘动
+     结束后 JS 自动 remove，无需手动清理 */
+  .heart-particle {
+    position: fixed;
+    font-size: 18px;
+    color: #ff4d7a;
+    text-shadow:
+      0 0 3px rgba(255,255,255,0.95),
+      0 0 10px rgba(255, 77, 122, 0.75),
+      0 0 18px rgba(255, 77, 122, 0.45);
+    pointer-events: none;
+    z-index: 170;                       /* 比 .particle 高一层 */
+    will-change: transform, opacity;
+    user-select: none;
+    line-height: 1;
+  }
+
+  /* 动态背景一：两只巨大的猫耳剪影，从画面顶部探进来（纯 CSS，无图片）
+     做法：::before / ::after 各画一只耳朵 —— clip-path 多边形勾耳廓
+     （尖顶在上、两侧微外鼓、底边最宽），内部填极暗蓝紫的 radial-gradient，
+     越往耳根越淡，让耳朵像"从黑暗里浮出来"而不是被平切。
+     模糊必须写在父级：clip-path 的裁切发生在元素自身渲染之后，
+     若把 blur 和 clip-path 写在同一元素上，模糊会被裁成硬边。
+     中央再压一团更淡的暗色椭圆，暗示屏幕外那颗巨大的猫头 */
+  .bg-glow {
+    position: fixed;
+    inset: 0;
+    z-index: 0;
+    pointer-events: none;
+    overflow: hidden;
+    background: radial-gradient(ellipse 120% 52% at 50% -14%,
+      rgba(32, 22, 66, 0.22) 0%,
+      rgba(32, 22, 66, 0.10) 45%,
+      transparent 72%);
+    filter: blur(14px);
+  }
+  .bg-glow::before,
+  .bg-glow::after {
+    content: '';
+    position: absolute;
+    top: 5vh;
+    width: 18vw;
+    height: 38vh;
+    --tilt: -9deg;                                 /* 倾角：左右耳对称外倾 */
+    /* 耳内渐变：耳尖最实，向下线性变淡（暗夜底上改用更亮的薰衣草紫，否则看不见） */
+    background: radial-gradient(ellipse 82% 92% at 50% 10%,
+      rgba(148, 126, 235, 0.85) 0%,
+      rgba(128, 106, 215, 0.62) 42%,
+      rgba(108, 88, 190, 0.28) 72%,
+      rgba(96, 78, 170, 0) 96%);
+    /* 耳廓：尖顶 → 两侧微外鼓 → 底边最宽（左右对称） */
+    clip-path: polygon(50% 0%, 66% 22%, 84% 58%, 100% 100%, 0% 100%, 16% 58%, 34% 22%);
+    opacity: 0.30;
+    animation: earBreathe 26s ease-in-out infinite alternate;
+  }
+  .bg-glow::before { left: 16vw; }
+  .bg-glow::after  { right: 16vw; --tilt: 9deg; }
+  /* 呼吸：耳朵极缓慢地一起一伏，几乎察觉不到，只让画面"活着" */
+  @keyframes earBreathe {
+    0%   { transform: rotate(var(--tilt)) translate3d(0, 0, 0) scale(1); }
+    100% { transform: rotate(var(--tilt)) translate3d(0, 1.5vh, 0) scale(1.04); }
+  }
+
+  /* 动态背景二：缓缓上浮的猫爪印（JS 生成 7 个，纯装饰）
+     🐾 是彩色 emoji，CSS 的 color 对它无效，只能用 filter 改色；
+     浅粉底上白爪印等于隐形，所以洗成深色剪影，靠低透明度做"若隐若现"的印花 */
+  .paw {
+    position: fixed;
+    bottom: -40px;
+    z-index: 0;
+    pointer-events: none;
+    line-height: 1;
+    user-select: none;
+    opacity: 0;
+    filter: brightness(0) invert(1);   /* 白色剪影：暗夜下深色爪印会隐形 */
+    animation: floatUp linear infinite;
+    will-change: transform, opacity;
+  }
+  @keyframes floatUp {
+    0%   { transform: translate3d(0, 0, 0) rotate(0deg) scale(0.9); opacity: 0; }
+    12%  { opacity: 0.15; }
+    50%  { transform: translate3d(16px, -52vh, 0) rotate(calc(var(--spin, 1) * -12deg)) scale(1); }
+    88%  { opacity: 0.15; }
+    100% { transform: translate3d(-12px, -110vh, 0) rotate(calc(var(--spin, 1) * 10deg)) scale(1.1); opacity: 0; }
+  }
+
+  /* 弱设备 / 系统开启"减弱动态效果"时的兜底：
+     停掉持续运行的背景动效，保留静态渐变，避免背景每帧变化
+     导致试管 backdrop-filter 反复重新模糊 */
+  @media (prefers-reduced-motion: reduce) {
+    .bg-glow::before,
+    .bg-glow::after { animation: none; transform: rotate(var(--tilt)); }
+    .paw { display: none; }
+  }
+
+  /* ========== 响应式：小屏自动缩小试管并折行 ==========
+     7 管桌面宽度约 536px，手机上一行放不下，靠 flex-wrap 自动折行；
+     同时按断点收窄试管与间距，让 7 管尽量排成整齐的一行 */
+  @media (max-width: 640px) {
+    body { padding: 12px; }
+    .title { font-size: 26px; }
+    .tube-row {
+      gap: 12px;
+      padding: 16px 8px;
+      min-height: 180px;
+    }
+    .tube {
+      width: 46px;
+      height: 168px;
+      border-radius: 12px 12px 20px 20px;
+    }
+    /* 小屏果冻块变矮，表情字号同步缩小，避免挤压变形 */
+    .layer .face { font-size: 13px; }
+  }
+  @media (max-width: 420px) {
+    .title { font-size: 23px; letter-spacing: 2px; }
+    .tube-row { gap: 8px; padding: 12px 4px; }
+    .tube {
+      width: 40px;
+      height: 146px;
+      border-radius: 10px 10px 17px 17px;
+    }
+    .tube::before { left: 5px; width: 4px; }  /* 高光条随试管收窄 */
+    .win-card { padding: 28px 36px; }
+    .win-card h2 { font-size: 27px; }
+    /* 小屏按钮缩 padding 防挤压 */
+    .btn { padding: 10px 20px; font-size: 13px; letter-spacing: 1px; }
+    .controls { gap: 8px; }
+  }
+</style>
+</head>
+<body>
+
+<!-- 动态背景层：缓慢漂移的极光渐变（纯装饰，不参与交互） -->
+<div class="bg-glow" aria-hidden="true"></div>
+
+<!-- 环境光反射层：选中果冻时屏幕边缘染上对应颜色的柔光（垫在游戏层之下） -->
+<div id="ambientGlow" aria-hidden="true"></div>
+
+<!-- 游戏主界面：标题 + 核心游戏区 + 重开按钮，仅此三个元素 -->
+<div id="gameScreen">
+  <h1 class="title">Jelly Cats<span>猫 咪 果 冻 排 序</span></h1>
+  <div class="level-bar" id="levelBar">第 1 关 · 简单模式</div>
+  <div class="tube-row" id="tubeRow"></div>
+  <div class="controls">
+    <button class="btn btn-undo" onclick="undoStep()" id="undoBtn" disabled>↩️ 撤销一步</button>
+    <button class="btn btn-primary" onclick="restartLevel()">重开这局=^•ω•^=</button>
+    <button class="btn btn-secondary" onclick="showLevelPicker()">📋 选关</button>
+  </div>
+</div>
+
+<script src="levels.js"></script>
+<script>
+// ============ 配置 ============
+const TUBE_CAP = 4;
+const COLORS = ['red', 'blue', 'green', 'yellow', 'purple', 'orange', 'pink'];
+
+// 颜色 → 猫咪 PNG（透明背景）；red 对应暹罗猫 cat-black
+const CAT_IMG = {
+  red:    'cat/cat-black.png',
+  blue:   'cat/cat-blue.png',
+  green:  'cat/cat-green.png',
+  yellow: 'cat/cat-yellow.png',
+  purple: 'cat/cat-purple.png',
+  orange: 'cat/cat-orange.png',
+  pink:   'cat/cat-pink.png',
+};
+// PNG 已统一裁过留白，所有品种用同一尺寸 100%
+function catBg(color) {
+  return `url('${CAT_IMG[color]}') center bottom / 100% 100% no-repeat`;
+}
+
+// 颜色 → 环境光（选中果冻时屏幕边缘的反射光，alpha 控制在 0.3 上下保持"淡淡"）
+const CAT_GLOW = {
+  red:    'rgba(236, 74, 74, 0.32)',
+  blue:   'rgba(96, 158, 255, 0.32)',
+  green:  'rgba(72, 208, 130, 0.30)',
+  yellow: 'rgba(240, 210, 32, 0.28)',
+  purple: 'rgba(196, 60, 225, 0.32)',
+  orange: 'rgba(240, 152, 24, 0.30)',
+  pink:   'rgba(230, 128, 170, 0.32)',
+};
+// 每次 render 后同步环境光：选中哪管的猫，屏幕边缘就漫出什么颜色
+function updateAmbient() {
+  const glow = document.getElementById('ambientGlow');
+  if (!glow) return;
+  if (selected !== null && tubes[selected] && tubes[selected].length > 0) {
+    const topColor = tubes[selected][tubes[selected].length - 1];
+    glow.style.boxShadow = `inset 0 0 120px ${CAT_GLOW[topColor] || 'transparent'}`;
+  } else {
+    glow.style.boxShadow = 'inset 0 0 120px transparent';
+  }
+}
+
+// 表情 → 带跟随结构的 HTML：.finner 包住整个表情（眼+嘴+眼），
+// 跟随光标时整体一起动，表情符号不会散架；两只眼睛另有 ±0.8px 的"视线领先"微偏移。
+// 所有表情统一为「左眼 + 嘴 + 右眼」三字符结构（•ω• / >ω< / ^ω^ / ;ω; / ♥ω♥ / >_<）
+function faceHtml(t) {
+  return `<span class="finner"><span class="eye">${t[0]}</span>${t[1]}<span class="eye">${t[2]}</span></span>`;
+}
+
+// ============ 猫咪眼睛跟随鼠标：整张脸朝光标方向微移，眼睛再多一点领先 ============
+// 关键：偏移必须作用在 .finner（整张脸）上而不是单独的眼睛上——
+// 只动眼睛会把 • 搬离 ω，表情符号当场散架（"眼睛和嘴都歪了"）。
+let eyeRaf = 0, eyeMX = -9999, eyeMY = -9999;
+
+// 性能：不在 rAF 里对每张脸逐帧 getBoundingClientRect（会强制重排）。
+// 改为缓存每张脸的基准中心点 + 目标节点，只在布局真正变化（render/缩放）时重建。
+// 表情元素每次 render 都会重建，所以 render() 末尾必须 invalidate。
+let eyeTargets = [], eyeCacheDirty = true;
+function invalidateEyeCache() { eyeCacheDirty = true; }
+function rebuildEyeCache() {
+  eyeTargets = [];
+  document.querySelectorAll('.face').forEach(f => {
+    const finner = f.firstElementChild;
+    if (!finner || !finner.classList.contains('finner')) return;
+    const r = f.getBoundingClientRect();
+    if (r.width === 0) return;            // 折叠/隐藏的块不参与
+    eyeTargets.push({
+      finner,
+      eyes: f.querySelectorAll('.eye'),
+      cx: r.left + r.width / 2,
+      cy: r.top + r.height / 2,
+    });
+  });
+  eyeCacheDirty = false;
+}
+
+// 何时停止追踪：倒水飞行、入场 stagger、结算弹窗——画面本身在动，跟随只会打架
+// 另外：只要有弹窗遮罩盖住画面（欢迎/选关/胜败），背景猫咪就不该再斜眼盯着鼠标
+function eyeTrackEnabled() {
+  if (isAnimating || isEntering || gameOver) return false;
+  return !document.querySelector('.win-overlay, .welcome-overlay, .level-picker');
+}
+
+document.addEventListener('pointermove', (e) => {
+  if (e.pointerType === 'touch') return;   // 触屏没有"视线"语义，拖动指挥让表情乱飘，直接不追
+  if (!eyeTrackEnabled()) return;
+  eyeMX = e.clientX;
+  eyeMY = e.clientY;
+  if (!eyeRaf) eyeRaf = requestAnimationFrame(updateEyeTrack);
+}, { passive: true });
+
+function updateEyeTrack() {
+  eyeRaf = 0;
+  if (!eyeTrackEnabled()) return;
+  if (eyeCacheDirty) rebuildEyeCache();    // 一帧最多量一次，且只在布局变化后
+  for (const t of eyeTargets) {
+    if (!t.finner.isConnected) continue;
+    const dx = eyeMX - t.cx;
+    const dy = eyeMY - t.cy;
+    // 整张脸：横 ±2px、纵 ±1.5px（纵向收得更紧，上下飘最容易显得"歪"）
+    const fx = Math.max(-2, Math.min(2, dx * 0.016));
+    const fy = Math.max(-1.5, Math.min(1.5, dy * 0.012));
+    t.finner.style.transform = `translate(${fx.toFixed(1)}px, ${fy.toFixed(1)}px)`;
+    // 眼睛再多 ±0.8px / ±0.5px 的领先量，像先看过去、脸再跟上
+    const ex = Math.max(-0.8, Math.min(0.8, dx * 0.006));
+    const ey = Math.max(-0.5, Math.min(0.5, dy * 0.004));
+    const eyeTf = `translate(${ex.toFixed(1)}px, ${ey.toFixed(1)}px)`;
+    for (const eye of t.eyes) eye.style.transform = eyeTf;
+  }
+}
+
+window.addEventListener('resize', invalidateEyeCache, { passive: true });
+
+// ============ 状态 ============
+let level = 1;
+let tubes = [];
+let selected = null;
+let isAnimating = false; // 动画锁：倒水飞行期间锁定输入，防止连点穿模
+let isEntering  = false; // 入场动画锁：render({entrance:true}) 后 stagger 期间锁输入
+let steps = 0;           // 当前已用步数
+let targetSteps = 0;     // 困难模式下的步数上限（简单模式 = 0）
+let colorCount = 0;      // 当前关卡的颜色数量
+let gameOver = false;    // 步数耗尽锁定（与 isAnimating 分离，避免 finally 解锁覆盖）
+let lastState = null;    // 撤销一步：存上一次 tubes + steps + selected 的快照
+
+// ============ 全局随机眨眼：3~6 秒随机挑一只猫正常眨眼一次 ============
+// 避开 isAnimating / gameOver / 飞行克隆体 / 爱心眼态——只让"静态中的常规猫"眨眼
+let idleBlinkTimer = null;
+function scheduleIdleBlink() {
+  clearTimeout(idleBlinkTimer);
+  const delay = 3000 + Math.random() * 3000;   // 3~6s
+  idleBlinkTimer = setTimeout(() => {
+    if (!isAnimating && !gameOver) doIdleBlink();
+    scheduleIdleBlink();
+  }, delay);
+}
+function doIdleBlink() {
+  // 收集所有"正常态"的 face：不是爱心眼、不在飞行克隆体里、不在选中试管里（选中态有自己的 CSS 眨眼）
+  const pool = document.querySelectorAll('.face:not(.love)');
+  const alive = Array.from(pool).filter(f =>
+    f.closest('.fly') === null &&
+    f.closest('.tube.selected') === null &&
+    f.isConnected);
+  if (alive.length === 0) return;
+  const target = alive[Math.floor(Math.random() * alive.length)];
+  const blinkAnim = target.animate([
+    { transform: 'translate(-50%, -50%) scale(1, 1)' },
+    { transform: 'translate(-50%, -50%) scale(1.08, 0.08)', offset: 0.5 },
+    { transform: 'translate(-50%, -50%) scale(1, 1)' }
+  ], { duration: 260, easing: 'ease-in-out' });
+  blinkAnim.onfinish = () => {};
+}
+
+// ============ 空闲撸猫：选中试管 5 秒不操作 → 爱心呼噜 ============
+let idleLoveTimer = null;        // 5 秒空闲定时器
+const IDLE_LOVE_MS = 5000;
+
+// 预加载 mp3（相对路径，HTML 与 mp3 同目录）。
+// 常规倒水绝不播 mp3——只有"撸猫/归类/稀有连击"这类稀疏事件才出声，避免听觉疲劳
+function makeAudio(src, volume) {
+  try {
+    const a = new Audio(src);
+    a.volume = volume;
+    a.preload = 'auto';
+    return a;
+  } catch (e) { return null; }   // 构造失败也不能影响游戏
+}
+// 呼噜：闲置撸猫 0.2（背景感）/ 整管归类 0.5（庆祝）
+const purrAudio = makeAudio('cat-adult.mp3', 0.2);
+// 哼唧：连击彩蛋专用，音量更低、音调略高，像小猫被摸舒服了
+const hmmAudio  = makeAudio('cat-hum.mp3', 0.3);
+
+// 连续无报错操作计数：满 3 次触发一次哼唧彩蛋，任何一次报错立即清零
+let cleanStreak = 0;
+
+/* mp3 统一下发入口：调用点不再直接操作 audio 对象。
+   所有异常（文件缺失、解码失败、自动播放策略拦截）都静默降级，绝不阻塞游戏 */
+function playClip(audio, volume, rate) {
+  try {
+    if (!audio) return false;
+    audio.volume = volume;
+    try {
+      if (rate && rate !== 1) {
+        audio.preservesPitch = false;          // 关掉变调保护：变速同时升调 → 更奶的音色
+        audio.webkitPreservesPitch = false;
+        audio.playbackRate = rate;
+      } else {
+        audio.playbackRate = 1;
+      }
+    } catch (e) { /* 个别浏览器只读，忽略 */ }
+    audio.currentTime = 0;
+    const p = audio.play();
+    if (p && p.catch) p.catch(() => {});       // 自动播放被拦截 → 静默
+    return true;
+  } catch (e) {
+    return false;
+  }
+}
+
+// ============ 资源预加载（静默后台缓存，防首次渲染卡顿） ============
+// 必须放在 purrAudio / hmmAudio 声明之后（ReferenceError 修复）
+(function preload() {
+  Object.values(CAT_IMG).forEach(src => {
+    const img = new Image();
+    img.src = src;
+  });
+  [purrAudio, hmmAudio].forEach(a => {
+    try { if (a) { a.preload = 'auto'; a.load(); } } catch (e) {}
+  });
+})();
+
+// 清空 idle timer（任何游戏操作都调用）
+function resetLoveTimer() {
+  clearTimeout(idleLoveTimer);
+  idleLoveTimer = null;
+
+  // 顺手把可能残留的爱心效果通过「眨眼」变回去
+  document.querySelectorAll('.face.love').forEach(f => {
+    // 暂停原本的 CSS 眨眼动画，防止冲突
+    f.style.animation = 'none';
+
+    // 播放一次眨眼动画（约 0.3 秒）
+    const blinkAnim = f.animate([
+      { transform: 'translate(-50%, -50%) scale(1, 1)' },
+      { transform: 'translate(-50%, -50%) scale(1.1, 0.1)', offset: 0.5 }, // 闭眼
+      { transform: 'translate(-50%, -50%) scale(1, 1)' }
+    ], { duration: 300, easing: 'ease-in-out', fill: 'forwards' });
+
+    // 在闭眼的瞬间（150ms），把爱心换回普通脸
+    setTimeout(() => {
+      f.innerHTML = faceHtml('•ω•');
+      f.classList.remove('love');
+    }, 150);
+
+    // 动画结束后，清理内联样式，让原本的 CSS 3 秒眨眼动画重新接管
+    blinkAnim.onfinish = () => { f.style.animation = ''; };
+  });
+}
+
+// ============ 存档（localStorage + try/catch，兼容 file:// 协议）============
+const SAVE_KEY   = 'jellycats_save_v1';
+const BEST_KEY   = 'jellycats_best_v1';   // 每关最佳步数记录：{ level: steps }
+const WELCOME_KEY = 'jellycats_welcome_v1';   // 首次欢迎引导是否已看过
+const STARS_KEY  = 'jellycats_stars_v1';   // 每关历史最高星级：{ level: 3 }
+
+// 最佳步数存取
+function getBestSteps(lv) {
+  try {
+    const data = JSON.parse(localStorage.getItem(BEST_KEY) || '{}');
+    return data[lv] || 0;
+  } catch (e) { return 0; }
+}
+function setBestSteps(lv, s) {
+  try {
+    const data = JSON.parse(localStorage.getItem(BEST_KEY) || '{}');
+    if (!data[lv] || s < data[lv]) data[lv] = s;   // 只存更优的
+    localStorage.setItem(BEST_KEY, JSON.stringify(data));
+  } catch (e) { /* localStorage 不可用静默失败 */ }
+}
+
+// 历史最高星级存取
+function getStars(lv) {
+  try {
+    const data = JSON.parse(localStorage.getItem(STARS_KEY) || '{}');
+    return data[lv] || 0;
+  } catch (e) { return 0; }
+}
+function setStars(lv, s) {
+  try {
+    const data = JSON.parse(localStorage.getItem(STARS_KEY) || '{}');
+    if (!data[lv] || s > data[lv]) data[lv] = s;   // 只存更高的
+    localStorage.setItem(STARS_KEY, JSON.stringify(data));
+  } catch (e) { /* localStorage 不可用静默失败 */ }
+}
+
+// 根据步数 + 关卡配置算星级门槛：
+// 困难模式直接用 targetSteps 作分母；简单模式用 colorCount * 3 作理论基准
+// 系数从 2 → 3：2 色关 base=6 (最少 4 步 ≤ 6→3⭐)，5 色关 base=15 (最少约 12 步 ≤ 15→3⭐)
+// 保证"理论最少玩家拿满 3 星，认真玩 1.5x 内拿 2 星"
+function calcStars(s) {
+  const denom = targetSteps > 0 ? targetSteps : Math.max(1, colorCount * 3);
+  const ratio = s / denom;
+  if (ratio <= 1.00) return 3;   // 不超过基准线 → 3 星
+  if (ratio <= 1.50) return 2;   // 基准线 × 1.5 以内 → 2 星
+  return 1;                       // 超过 → 1 星
+}
+function starThresholds() {
+  const base = targetSteps > 0 ? targetSteps : Math.max(1, colorCount * 3);
+  return { three: base, two: Math.round(base * 1.5), base };
+}
+
+function saveState() {
+  try {
+    const data = {
+      schemaVersion: 1,
+      level,
+      tubes,
+      steps,
+      targetSteps,
+    };
+    localStorage.setItem(SAVE_KEY, JSON.stringify(data));
+  } catch (e) { /* localStorage 不可用静默失败 */ }
+}
+function loadState() {
+  try {
+    const raw = localStorage.getItem(SAVE_KEY);
+    if (!raw) return null;
+    const data = JSON.parse(raw);
+    if (data && data.schemaVersion === 1 && Array.isArray(data.tubes)) {
+      return data;
+    }
+  } catch (e) { /* 存档损坏忽略 */ }
+  return null;
+}
+
+// ============ 首次欢迎引导 ============
+function showWelcome() {
+  const overlay = document.createElement('div');
+  overlay.className = 'win-overlay welcome-overlay';
+  overlay.innerHTML = `
+    <div class="win-card welcome-card">
+      <h2 class="welcome-cat">(=^･ｪ･^=)</h2>
+      <p class="welcome-title">欢迎来到 Jelly Cats！</p>
+      <p class="welcome-sub">点击试管，把同色猫咪排在一起吧！</p>
+      <button class="jelly-btn" type="button">开始撸猫</button>
+    </div>
+  `;
+  document.body.appendChild(overlay);
+
+  const btn = overlay.querySelector('.jelly-btn');
+  btn.addEventListener('click', () => {
+    // 先记账：即使关闭动画被打断，下次也不会再弹
+    try { localStorage.setItem(WELCOME_KEY, '1'); } catch (e) {}
+    // 淡出：卡片同步缩小，像果冻被吸走
+    try {
+      const a = overlay.animate(
+        [{ opacity: 1, transform: 'scale(1)' }, { opacity: 0, transform: 'scale(0.96)' }],
+        { duration: 240, easing: 'ease' }
+      );
+      a.finished.then(() => overlay.remove()).catch(() => overlay.remove());
+    } catch (e) {
+      overlay.remove();
+    }
+  });
+}
+
+// ============ 工具 ============
+const wait = (ms) => new Promise(r => setTimeout(r, ms));
+const tubeEl = (i) => document.querySelector(`.tube[data-idx="${i}"]`);
+
+// ============ 音效（Web Audio API 纯代码合成，无外部文件）============
+let audioCtx = null;
+function getAudioCtx() {
+  if (!audioCtx) audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+  return audioCtx;
+}
+function playSound(type, step, vol) {
+  try {
+    const ctx = getAudioCtx();
+
+    if (type === 'pour') {
+      // 果冻落地"啵"声：短促高频正弦波，音高快速下滑 + 弹性音量包络
+      // step：第几块落地（0 起），音高逐块升高，形成"啵、啵、啵"的上行节奏
+      // vol：落地重量感——目标管同色块越多音量越大（0.3 轻 → 0.6 满管）
+      const pitch = 1 + (typeof step === 'number' ? step * 0.12 : 0);
+      const peak  = typeof vol === 'number' ? vol : 0.3;
+      const osc = ctx.createOscillator();
+      const gain = ctx.createGain();
+      osc.connect(gain);
+      gain.connect(ctx.destination);
+      osc.type = 'sine';
+      const t = ctx.currentTime;
+      osc.frequency.setValueAtTime(880 * pitch, t);
+      osc.frequency.exponentialRampToValueAtTime(240 * pitch, t + 0.09);
+      gain.gain.setValueAtTime(0.001, t);
+      gain.gain.exponentialRampToValueAtTime(peak, t + 0.012);   // 快速起振
+      gain.gain.exponentialRampToValueAtTime(0.001, t + 0.11);  // 弹性衰减
+      osc.start(t);
+      osc.stop(t + 0.12);
+
+    } else if (type === 'error') {
+      // 报错：只用低沉稳重的合成哼唧，绝不播猫叫 mp3（尖锐叫声听起来像挨打，很劝退）
+      // 两个正弦叠一起：基频 560→300Hz 下滑 + 低八度垫音，音量压在 0.3 以下
+      const t = ctx.currentTime;
+      [1, 0.5].forEach((mul, idx) => {
+        try {
+          const osc = ctx.createOscillator();
+          const gain = ctx.createGain();
+          osc.connect(gain);
+          gain.connect(ctx.destination);
+          osc.type = 'sine';
+          osc.frequency.setValueAtTime(560 * mul, t);
+          osc.frequency.exponentialRampToValueAtTime(300 * mul, t + 0.22);   // 委屈地下滑
+          const peak = idx === 0 ? 0.18 : 0.09;
+          gain.gain.setValueAtTime(0.001, t);
+          gain.gain.exponentialRampToValueAtTime(peak, t + 0.02);
+          gain.gain.exponentialRampToValueAtTime(0.001, t + 0.24);
+          osc.start(t);
+          osc.stop(t + 0.26);
+        } catch (e) { /* 单层失败不影响另一层 */ }
+      });
+
+    } else if (type === 'win') {
+      // 过关：上升音阶
+      const notes = [523, 659, 784, 1047];
+      notes.forEach((freq, i) => {
+        const o = ctx.createOscillator();
+        const g = ctx.createGain();
+        o.connect(g); g.connect(ctx.destination);
+        o.type = 'sine';
+        o.frequency.setValueAtTime(freq, ctx.currentTime + i * 0.1);
+        g.gain.setValueAtTime(0.15, ctx.currentTime + i * 0.1);
+        g.gain.exponentialRampToValueAtTime(0.01, ctx.currentTime + i * 0.1 + 0.15);
+        o.start(ctx.currentTime + i * 0.1);
+        o.stop(ctx.currentTime + i * 0.1 + 0.15);
+      });
+
+    } else if (type === 'select') {
+      // 选中：极短的高频"滴"声
+      const osc = ctx.createOscillator();
+      const gain = ctx.createGain();
+      osc.connect(gain);
+      gain.connect(ctx.destination);
+      osc.type = 'sine';
+      const t = ctx.currentTime;
+      osc.frequency.setValueAtTime(1500, t);
+      osc.frequency.exponentialRampToValueAtTime(1100, t + 0.04);
+      gain.gain.setValueAtTime(0.001, t);
+      gain.gain.exponentialRampToValueAtTime(0.12, t + 0.008);
+      gain.gain.exponentialRampToValueAtTime(0.001, t + 0.05);
+      osc.start(t);
+      osc.stop(t + 0.06);
+    }
+  } catch(e) { /* 音频不可用静默失败 */ }
+}
+
+// ============ 带种子的洗牌算法（Fisher-Yates + 种子）============
+function seededShuffle(array, seed) {
+  // 简单的种子随机数生成器（mulberry32）
+  let s = seed;
+  function random() {
+    s |= 0; s = s + 0x6D2B79F5 | 0;
+    let t = Math.imul(s ^ s >>> 15, 1 | s);
+    t = t + Math.imul(t ^ t >>> 7, 61 | t) ^ t;
+    return ((t ^ t >>> 14) >>> 0) / 4294967296;
+  }
+  const arr = [...array];
+  for (let i = arr.length - 1; i > 0; i--) {
+    const j = Math.floor(random() * (i + 1));
+    [arr[i], arr[j]] = [arr[j], arr[i]];
+  }
+  return arr;
+}
+
+// ============ 关卡配置 ============
+function getLevelConfig(lv) {
+  // 起始关 5 色，逐关加色，封顶 7 种
+  const colorCount = Math.min(4 + lv, COLORS.length);
+  // 无论简单/困难模式都固定 2 支空管——空管数量影响可解性，不动它
+  // 困难模式难度完全由 targetSteps（步数限制）体现
+  const hard = lv > 10;
+  const emptyTubes = 2;
+  const tubeCount = colorCount + emptyTubes;
+  // 困难模式动态步数上限：颜色数 × 4（7 色 → 28 步）
+  const targetSteps = hard ? colorCount * 4 : 0;
+  return { colorCount, tubeCount, hard, targetSteps };
+}
+
+// ============ 关卡退场：所有果冻从底部开始向上"融化"（节奏收尾） ============
+// 重开/换关时先融化旧盘面，再让新关卡入场——每局都有"开始→过程→结束→再来一局"的呼吸感
+function meltAway(done) {
+  const row = document.getElementById('tubeRow');
+  const tubeEls = row ? [...row.children] : [];
+  // 融化质感：底部对齐 + 纵向压扁、横向微涨，像整块果冻塌下去淌成一滩
+  const MELT_EASE = 'cubic-bezier(0.55, 0.055, 0.675, 0.19)';  // 重力加速下坠
+  const MELT_DUR = 320;
+  let maxWait = 0;
+  const meltLayers = [];
+  tubeEls.forEach((tubeEl, ti) => {
+    // DOM 里第一个孩子 = 管底果冻，li 越小越靠底 → 底部先化，管间 40ms 小错峰
+    [...tubeEl.querySelectorAll('.layer')].forEach((layer, li) => {
+      const delay = li * 70 + ti * 40;
+      maxWait = Math.max(maxWait, delay + MELT_DUR);
+      layer.style.transformOrigin = '50% 100%';   // 以管底为支点塌陷
+      meltLayers.push(layer);
+      layer.animate([
+        { transform: 'scale(1, 1)', opacity: 1 },
+        { transform: 'scale(1.1, 0.1) translateY(15px)', opacity: 0 }
+      ], { duration: MELT_DUR, delay, easing: MELT_EASE, fill: 'forwards' });
+    });
+  });
+  if (maxWait === 0) { done(); return; }   // 空盘面（理论兜底）直接进下一关
+  isEntering = true;   // 融化期间锁输入，防连点
+  setTimeout(() => {
+    // 全部化完再一次性摘节点：试管是 column-reverse 流式布局，
+    // 逐块摘除会让上面的果冻整体下坠跳动；这里紧接着就 render() 重建，肉眼无感
+    meltLayers.forEach(el => el.remove());
+    isEntering = false;
+    done();
+  }, maxWait + 30);
+}
+
+// ============ 初始化关卡 ============
+// resume: 可选，从存档恢复时传入 { tubes, steps, targetSteps }
+function initLevel(lv, resume) {
+  resetLoveTimer();
+  clearTimeout(idleBlinkTimer);
+  cleanStreak = 0;   // 换关/重开重置连击彩蛋计数
+  // 清掉残留的结算弹窗/彩带：失败弹窗的"再来一次"、胜利弹窗自动跳关都会走到这里，
+  // 失败弹窗自身没有任何移除路径，不清就会永久挂在屏上挡住新盘面
+  document.querySelectorAll('.win-overlay, .confetti').forEach(el => el.remove());
+  level = lv;
+  selected = null;
+  isAnimating = false;
+  isEntering = false;
+  gameOver = false;
+  lastState = null;   // 关卡切换 → 清空撤销栈
+  const ub = document.getElementById('undoBtn');
+  if (ub) ub.disabled = true;
+
+  // 无论固定关卡还是随机生成，先取配置拿到 targetSteps
+  const cfg = getLevelConfig(lv);
+
+  if (resume && Array.isArray(resume.tubes)) {
+    // 从存档恢复：直接用存档里的 tubes / steps / targetSteps
+    tubes = resume.tubes;
+    steps = resume.steps || 0;
+    targetSteps = resume.targetSteps || cfg.targetSteps;
+  } else {
+    steps = 0;
+    targetSteps = cfg.targetSteps;
+
+    if (typeof LEVELS !== 'undefined' && LEVELS[lv - 1]) {
+      // 固定关卡：直接读 LEVELS，数字编号 → 颜色字符串
+      const numToColor = (n) => COLORS[n - 1];
+      tubes = LEVELS[lv - 1].map((tube) => tube.map(numToColor));
+    } else {
+      // 超过固定关卡范围，退回到 seededShuffle 随机生成
+      const { colorCount, tubeCount } = cfg;
+
+      const pool = [];
+      for (let c = 0; c < colorCount; c++) {
+        for (let i = 0; i < TUBE_CAP; i++) pool.push(COLORS[c]);
+      }
+
+      const shuffled = seededShuffle(pool, lv * 1000 + 42);
+
+      tubes = [];
+      let idx = 0;
+      for (let i = 0; i < tubeCount; i++) {
+        if (i < colorCount) {
+          tubes.push(shuffled.slice(idx, idx + TUBE_CAP));
+          idx += TUBE_CAP;
+        } else {
+          tubes.push([]);
+        }
+      }
+    }
+  }
+
+  // 关卡元信息：colorCount 从 tubes 实际数据里算（比 LEVELS 配置更准）
+  colorCount = new Set(tubes.flat()).size;
+
+  render({ entrance: true });   // 关卡入场 stagger 动画
+  updateStepsUI();
+  saveState();   // 每次关卡初始化后自动存档
+  scheduleIdleBlink();   // 启动全局随机眨眼循环（关卡切换时重新随机）
+}
+
+// ========== 关卡难度状态栏 + 步数/星级 UI ==========
+function updateStepsUI() {
+  const bar = document.getElementById('levelBar');
+  if (!bar) return;
+  bar.classList.toggle('hard', targetSteps > 0);   // 困难模式橙色样式
+
+  if (targetSteps > 0) {
+    // 困难模式：只显示剩余步数
+    const remaining = targetSteps - steps;
+    bar.innerHTML = `第 ${level} 关 · 困难模式　🐾 剩余 ${remaining} / ${targetSteps}`;
+    bar.classList.toggle('danger', remaining <= 5);
+  } else {
+    // 简单模式：已走步数 + 实时星级
+    const liveStars = calcStars(steps);
+    const starsHtml = renderStarMeter(liveStars);
+    bar.innerHTML = `第 ${level} 关 · 简单模式　🐾 已走 ${steps} 步　${starsHtml}`;
+    bar.classList.remove('danger');
+  }
+}
+
+// 渲染实时星级进度：live 颗星亮起、3-live 颗星变暗（opacity + 灰色）
+function renderStarMeter(live) {
+  const lit = '★';
+  const dim = '☆';
+  let html = '<span class="star-meter" id="starMeter">';
+  for (let i = 0; i < 3; i++) {
+    html += i < live
+      ? `<span class="star-on">${lit}</span>`
+      : `<span class="star-off">${dim}</span>`;
+  }
+  html += '</span>';
+  return html;
+}
+
+// ============ 渲染（innerHTML 一次性替换，性能优化）============
+// opts.hideTop = { tube, count }：渲染时隐藏目标管顶部的 count 块，
+// 这些块的视觉由"飞行克隆体"接管，落地后才逐块补入 DOM
+function render(opts) {
+  const row = document.getElementById('tubeRow');
+  if (!row) return;
+  const hide = (opts && opts.hideTop) || null;
+  const entrance = !!(opts && opts.entrance);
+  let html = '';
+  tubes.forEach((tube, i) => {
+    const omit = hide && hide.tube === i ? hide.count : 0;
+    const visLen = tube.length - omit;   // 可见块数（类名/选中态按可见数计算）
+
+    let cls = 'tube';
+    if (selected === i) cls += ' selected';
+    if (visLen >= 3) cls += ' almost-full';
+    // 选中态高亮：能接收当前选中管的目标管 → 呼吸发光
+    // 不能接收的其余管 → 压暗 30%，视线焦点只留给可操作的管
+    if (selected !== null && selected !== i) {
+      if (canPour(selected, i)) cls += ' can-receive';
+      else cls += ' dimmed';
+    }
+
+    // 可见部分的顶部连续同色块数量（倒水时作为一个整体）
+    let topSame = 0;
+    if (visLen > 0) {
+      const topColor = tube[visLen - 1];
+      for (let k = visLen - 1; k >= 0; k--) {
+        if (tube[k] === topColor) topSame++;
+        else break;
+      }
+    }
+
+    let layersHtml = '';
+    for (let k = 0; k < visLen; k++) {
+      let layerCls = 'layer ' + tube[k];
+      if (selected === i && k >= visLen - topSame) {
+        layerCls += ' picked';
+      }
+      layersHtml += `<div class="${layerCls}" style="background:${catBg(tube[k])}"><span class="face">${faceHtml('•ω•')}</span></div>`;
+    }
+
+  // 关卡入场 stagger：每个试管延迟 i*70ms 从下方滑上来
+  const enterStyle = entrance
+    ? `animation: tubeEnter .45s cubic-bezier(.175,.885,.32,1.275) backwards; animation-delay:${i * 70}ms`
+    : '';
+
+  html += `<div class="${cls}" data-idx="${i}" onclick="onTubeClick(event, ${i})" style="${enterStyle}">${layersHtml}</div>`;
+  });
+  row.innerHTML = html;
+
+  // 环境光跟随选中态：选中 → 边缘漫出对应颜色；取消/倒水后 → 柔光退场
+  updateAmbient();
+  // 表情节点在 render 里整批重建，眼神追踪的缓存基准必须作废并重新测量
+  invalidateEyeCache();
+
+  // 入场锁：stagger 总时长 ≈ tubes.length * 70ms + 450ms，锁期间禁止点击（否则 getBoundingClientRect 量到动画中途位置）
+  if (entrance && tubes.length > 0) {
+    isEntering = true;
+    setTimeout(() => { isEntering = false; }, tubes.length * 70 + 450 + 30);
+  }
+}
+
+// ============ 点击逻辑 ============
+function onTubeClick(e, i) {
+  if (isAnimating || gameOver || isEntering) return;
+
+  // 任何新点击 → 取消上一次的空闲计时和残留爱心效果
+  resetLoveTimer();
+
+  if (selected === null) {
+    // 没选中任何管就点空试管 → 疑惑反馈（防玩家觉得卡死）
+    if (tubes[i].length === 0) {
+      const el = tubeEl(i);
+      if (!el) return;
+      const shake = el.animate([
+        { transform: 'translateX(0)' },
+        { transform: 'translateX(-6px)', offset: 0.2 },
+        { transform: 'translateX(6px)', offset: 0.4 },
+        { transform: 'translateX(-4px)', offset: 0.6 },
+        { transform: 'translateX(0)' }
+      ], { duration: 280, easing: 'ease-out' });
+      shake.finished.then(() => shake.cancel()).catch(() => {});
+      const hint = document.createElement('div');
+      hint.textContent = '喵？';
+      hint.style.cssText = 'position:absolute; top:38%; left:50%; transform:translate(-50%,-50%) scale(.8); color:#ffb8d0; font-size:22px; font-weight:700; text-shadow:0 1px 0 #fff; pointer-events:none; z-index:160; opacity:0; transition:opacity .15s, transform .35s;';
+      el.style.position = 'relative';
+      el.appendChild(hint);
+      requestAnimationFrame(() => {
+        hint.style.opacity = '1';
+        hint.style.transform = 'translate(-50%,-80%) scale(1)';
+      });
+      setTimeout(() => {
+        hint.style.opacity = '0';
+        hint.style.transform = 'translate(-50%,-110%) scale(.9)';
+        setTimeout(() => hint.remove(), 200);
+      }, 400);
+      try {
+        // 复用全局 context：new AudioContext 有实例数量上限，连点空管会耗尽；
+        // 且全局 context 不能 close（关了其他音效全哑）
+        const ctx = getAudioCtx();
+        const o = ctx.createOscillator();
+        const g = ctx.createGain();
+        o.type = 'sine';
+        o.frequency.setValueAtTime(600, ctx.currentTime);
+        o.frequency.exponentialRampToValueAtTime(900, ctx.currentTime + 0.12);
+        o.frequency.exponentialRampToValueAtTime(400, ctx.currentTime + 0.28);
+        g.gain.setValueAtTime(0.0001, ctx.currentTime);
+        g.gain.exponentialRampToValueAtTime(0.18, ctx.currentTime + 0.03);
+        g.gain.exponentialRampToValueAtTime(0.0001, ctx.currentTime + 0.32);
+        o.connect(g).connect(ctx.destination);
+        o.start();
+        o.stop(ctx.currentTime + 0.35);
+      } catch (e) {}
+      return;
+    }
+    // 第一次点击（选中态）
+    selected = i;
+    playSound('select');
+    render();
+    // 先清掉上一次的定时器：连续点不同试管时，旧 timer 不取消会叠出多次呼噜（听觉疲劳）
+    clearTimeout(idleLoveTimer);
+    idleLoveTimer = setTimeout(() => triggerLove(i), IDLE_LOVE_MS);
+  } else if (selected === i) {
+    // 再点同一个：取消选中，顺手停掉还没到点的撸猫计时
+    selected = null;
+    clearTimeout(idleLoveTimer);
+    idleLoveTimer = null;
+    render();
+  } else {
+    // 尝试倒水
+    tryPour(selected, i);
+  }
+}
+
+// ============ 空闲撸猫：选中试管 5 秒不操作 → 眨眼变爱心呼噜 ============
+function triggerLove(i) {
+  // 触发时再校验一次：试管还非空、游戏还没结束、动画没在跑
+  if (gameOver || isAnimating) return;
+  if (!tubes[i] || tubes[i].length === 0) return;
+
+  const el = tubeEl(i);
+  if (!el) return;
+
+  // ① 试管里所有果冻表情：先眨眼，闭眼瞬间变成 ♥ω♥
+  const faces = el.querySelectorAll('.layer:not(.fly) .face');
+  faces.forEach(f => {
+    f.style.animation = 'none';
+
+    const blinkAnim = f.animate([
+      { transform: 'translate(-50%, -50%) scale(1, 1)' },
+      { transform: 'translate(-50%, -50%) scale(1.1, 0.1)', offset: 0.5 }, // 闭眼
+      { transform: 'translate(-50%, -50%) scale(1, 1)' }
+    ], { duration: 300, easing: 'ease-in-out', fill: 'forwards' });
+
+    setTimeout(() => {
+      f.innerHTML = faceHtml('♥ω♥');
+      f.classList.add('love');
+    }, 150);
+
+    blinkAnim.onfinish = () => { f.style.animation = ''; };
+  });
+
+  // ② 爱心粒子（2~3 个粉色小爱心缓缓向上飘）
+  spawnHearts(el);
+
+  // ③ 呼噜 mp3：压低到 0.2，只作背景白噪音，不抢戏
+  playClip(purrAudio, 0.2);
+}
+
+/* 爱心粒子：固定定位的 ♥ emoji，竖直向上缓缓飘动 + 渐隐
+   复用 Web Animations API，结束后自动移除节点 */
+function spawnHearts(el, forceCount) {
+  const r = el.getBoundingClientRect();
+  const count = forceCount ?? (2 + Math.floor(Math.random() * 2));   // 默认 2~3 个，或调用方硬指定
+  for (let k = 0; k < count; k++) {
+    const h = document.createElement('div');
+    h.className = 'heart-particle';
+    h.textContent = '♥';
+    h.style.left = (r.left + r.width * (0.3 + Math.random() * 0.4)) + 'px';
+    h.style.top  = (r.top - 6 + Math.random() * 4) + 'px';
+    document.body.appendChild(h);
+
+    const dx = (Math.random() - 0.5) * 40;        // ±20px 横向飘移
+    const up = 60 + Math.random() * 40;           // 向上飘 60~100px
+    const dur = 1000 + Math.random() * 400;       // 1~1.4s
+
+    const anim = h.animate([
+      { transform: 'translate(0,0) scale(0.6)', opacity: 0 },
+      { transform: `translate(${dx * 0.5}px, ${-up * 0.4}px) scale(1.1)`,
+        opacity: 1, offset: 0.25,
+        easing: 'cubic-bezier(0.2, 0.8, 0.3, 1)' },
+      { transform: `translate(${dx}px, ${-up}px) scale(0.85)`,
+        opacity: 0, offset: 1,
+        easing: 'cubic-bezier(0.5, 0, 0.7, 0)' }
+    ], { duration: dur, fill: 'forwards' });
+
+    anim.finished.then(() => h.remove()).catch(() => h.remove());
+  }
+}
+
+// ============ 表情切换工具 ============
+// el: 某个 .face 元素（或 CSS 选择器字符串，自动 querySelectorAll）
+// text: 临时显示的表情字符，如 '>ω<'
+// duration: 毫秒，时间到自动恢复成 '•ω•'
+function setFace(el, text, duration) {
+  const nodes = typeof el === 'string'
+    ? document.querySelectorAll(el)
+    : (el.nodeType ? [el] : el);   // 兼容单元素 / NodeList / 数组
+
+  nodes.forEach(node => {
+    if (!node) return;
+    node.innerHTML = faceHtml(text);
+    setTimeout(() => {
+      // render() 可能在期间重建过 DOM——用 isConnected 兜底，
+      // 不在文档里了就跳过（说明新的 .face 已经被 render 换成正确的默认脸）
+      if (node.isConnected) node.innerHTML = faceHtml('•ω•');
+    }, duration);
+  });
+}
+
+// ============ 倒水逻辑 ============
+function canPour(from, to) {
+  if (from === to) return false;
+  if (tubes[from].length === 0) return false;
+  if (tubes[to].length >= TUBE_CAP) return false;
+  const fromTop = tubes[from][tubes[from].length - 1];
+  const toTop = tubes[to][tubes[to].length - 1];
+  return tubes[to].length === 0 || fromTop === toTop;
+}
+
+/* 非法倒水：果冻扭曲晃动 + 音效 + 整屏震动（数据不变，选中转移到目标管） */
+function rejectPour(to) {
+  playSound('error');
+  cleanStreak = 0;          // 报错打断连击，彩蛋从头计
+  // 震动反馈（手机端）
+  if (navigator.vibrate) navigator.vibrate(100);
+  shakeScreen(1);           // 整屏震动：报错的强反馈
+  selected = to;
+  render();
+  const el = tubeEl(to);
+  if (el) {
+    el.classList.add('error');
+    setTimeout(() => el.classList.remove('error'), 500);
+    // 错误反馈：目标管里所有猫一起 ;ω; 委屈脸 500ms
+    setFace(el.querySelectorAll('.face'), ';ω;', 500);
+  }
+}
+
+/* 落地缓冲：整管液面"下压 → 回弹"（移除类 + 强制 reflow 实现连续重触发） */
+function bounceTube(el) {
+  el.classList.remove('squash');
+  void el.offsetWidth;
+  el.classList.add('squash');
+}
+
+/* 屏幕震动：非法倒水（强，intensity=1）/ 归类完成（轻，0.55）。
+   --shake 控制振幅；移除类 + 强制 reflow 保证连续触发时都能重新播放 */
+function shakeScreen(intensity) {
+  const gs = document.getElementById('gameScreen');
+  if (!gs) return;
+  gs.style.setProperty('--shake', intensity || 1);
+  gs.classList.remove('shake');
+  void gs.offsetWidth;
+  gs.classList.add('shake');
+  clearTimeout(shakeScreen.timer);
+  shakeScreen.timer = setTimeout(() => gs.classList.remove('shake'), 480);
+}
+
+/* 粒子飞溅：在目标管口上方生成同色小圆点，
+   先向上散开、再受重力下坠并淡出，动画结束后移除节点。
+   forceCount 由调用方按落地重量指定（3 轻 → 6 满管），缺省 3~5 个 */
+function spawnParticles(el, colorClass, forceCount) {
+  const r = el.getBoundingClientRect();
+  const count = forceCount ?? (3 + Math.floor(Math.random() * 3));
+  for (let i = 0; i < count; i++) {
+    const size = 4 + Math.random() * 5;
+    const p = document.createElement('div');
+    p.className = 'particle ' + colorClass;
+    p.style.width = size + 'px';
+    p.style.height = size + 'px';
+    p.style.left = (r.left + r.width * (0.2 + Math.random() * 0.6) - size / 2) + 'px';
+    p.style.top = (r.top + 12 + Math.random() * 14) + 'px';
+    document.body.appendChild(p);
+
+    const dx = (Math.random() - 0.5) * 60;   // 横向散开量
+    const up = 16 + Math.random() * 30;      // 向上初速
+    const anim = p.animate([
+      { transform: 'translate(0, 0) scale(0.4)', opacity: 0.95, offset: 0 },
+      { transform: `translate(${dx * 0.55}px, ${-up}px) scale(1)`, opacity: 0.9, offset: 0.42, easing: 'cubic-bezier(0.2, 0.8, 0.3, 1)' },
+      { transform: `translate(${dx}px, ${-up + 28}px) scale(0.25)`, opacity: 0, offset: 1, easing: 'cubic-bezier(0.6, 0, 0.9, 0.5)' }
+    ], { duration: 380 + Math.random() * 200 });
+    anim.finished.then(() => p.remove()).catch(() => p.remove());
+  }
+}
+
+/* 背景猫爪印：7 个 🐾 缓缓上浮并轻微旋转，纯装饰。
+   数量控制在 7 个——试管带 backdrop-filter，背景每帧变化都会触发重新模糊，
+   元素越少合成压力越低，视觉上仍够"空气感" */
+function initPaws() {
+  for (let i = 0; i < 7; i++) {
+    const p = document.createElement('div');
+    p.className = 'paw';
+    p.textContent = '🐾';
+    p.style.fontSize = (12 + Math.random() * 12) + 'px';   // 12 ~ 24px
+    p.style.left = Math.random() * 100 + 'vw';
+    p.style.setProperty('--spin', Math.random() < 0.5 ? 1 : -1);  // 一半左旋一半右旋
+    p.style.animationDuration = (16 + Math.random() * 20) + 's';
+    p.style.animationDelay = -(Math.random() * 30) + 's';   // 负延迟：加载时爪印已散布在半空
+    document.body.appendChild(p);
+  }
+}
+
+/* 合法倒水：数据即时更新，视觉改为"果冻逐块抛物线飞行落入目标管" */
+async function tryPour(from, to) {
+  if (isAnimating) return;
+  resetLoveTimer();   // 倒水操作 → 打断空闲计时
+
+  if (!canPour(from, to)) {
+    rejectPour(to);
+    return;
+  }
+
+  // —— 数据变更前：测量起飞坐标（源管顶部 n 块的屏幕位置）——
+  let   fromEl = tubeEl(from);   // render 重建 DOM 后需要重新赋值
+  let   toEl   = tubeEl(to);   // 仅用于倒水前的坐标测量，render 后需重新获取
+  const srcLen = tubes[from].length;
+  const topColor = tubes[from][srcLen - 1];
+  let n = 0;
+  for (let k = srcLen - 1; k >= 0 && tubes[from][k] === topColor; k--) n++;
+  n = Math.min(n, TUBE_CAP - tubes[to].length);
+
+  const fromLayers = fromEl.querySelectorAll('.layer');
+  const startRects = [];
+  for (let j = 0; j < n; j++) {
+    startRects.push(fromLayers[srcLen - n + j].getBoundingClientRect());
+  }
+  let   tubeRect = toEl.getBoundingClientRect();
+  const baseLayers = toEl.querySelectorAll('.layer').length; // 目标管已有可见块数
+
+  // —— 数据先行更新（保证数据与逻辑同步），渲染时压制目标管顶部 n 块 ——
+  selected = null;
+  // 存撤销快照（倒水动作发生前）
+  lastState = {
+    tubes: tubes.map(t => [...t]),   // 深拷贝
+    steps: steps,
+    level: level,
+    targetSteps: targetSteps
+  };
+  pour(from, to);
+  // 成功倒水：步数 +1（无论简单/困难模式都记步数），实时刷新星级进度条
+  steps++;
+  updateStepsUI();
+  // 启用撤销按钮（undoBtn 在 HTML 里初始 disabled）
+  const ub = document.getElementById('undoBtn');
+  if (ub) ub.disabled = false;
+  // 本次倒水是否让目标管归类完成（满 4 块同色），用于落地时的轻震动反馈
+  const completedTube = tubes[to].length === TUBE_CAP && tubes[to].every(c => c === tubes[to][0]);
+  isAnimating = true; // 动画锁：从起飞到落地缓冲全程锁定
+  render({ hideTop: { tube: to, count: n } });
+  // 关键：render 用 innerHTML 重建了所有试管 DOM，必须重新获取最新元素。
+  // 否则后续 appendChild / squash 动画会作用在已脱离文档的旧节点上，全部失效。
+  toEl   = tubeEl(to);
+  // 源管也要重取——render 重建了它的 DOM，递出动画必须绑在新节点上
+  fromEl = tubeEl(from);
+  // 同理：render 后的 flex 重排可能让试管位置微移，落点坐标必须按新几何重测，
+  // 否则飞行终点会停在旧坐标上（错位一个管位）
+  tubeRect = toEl.getBoundingClientRect();
+
+  // —— 目标格几何：只用布局尺寸，不取果冻块的 getBoundingClientRect ——
+  // 源块可能正被"选中 Q 弹"动画纵向拉伸（scaleY 1.1），用它实测的高度会让落点整体跑偏
+  const GAP = 2;                                   // 与 CSS .tube 的 gap 一致
+  const tubeStyle = getComputedStyle(toEl);
+  const layerH = (toEl.clientHeight
+                  - parseFloat(tubeStyle.paddingTop)
+                  - parseFloat(tubeStyle.paddingBottom)) * 0.25 - 2;
+  const layerW = toEl.clientWidth;
+
+  try {
+    // —— 源管「蓄力倾倒」微动画：先反向蓄一下 → 猛倒 → 回正，180ms ——
+    // 倾倒方向跟随目标管位置：目标在左就向左倒，在右就向右倒，
+    // 和小猫抛物线的飞行方向保持一致，不再是写死的向右倒
+    // 注意：动画结束必须 .cancel()，不能留 fill:'forwards' 挂住 transform——
+    //       否则这次 render 重建 DOM 之前，源管的 :hover上浮 / .selected光环 会被
+    //       内联动画层的恒等 transform 盖住，视觉上"倒完水这个杯子突然不会动了"
+    if (fromEl) {
+      fromEl.style.animation = 'none';
+      // 比较两管中心点 X 坐标，得出倾倒方向（tubeRect 已在 render 后重测，是最新几何）
+      const fromRect = fromEl.getBoundingClientRect();
+      const dirSign = (tubeRect.left + tubeRect.width / 2) < (fromRect.left + fromRect.width / 2) ? -1 : 1;
+      const handAnim = fromEl.animate([
+        { transform: 'rotate(0deg)' },
+        { transform: `rotate(${-3 * dirSign}deg)`, offset: 0.25 },   /* 反向蓄力 */
+        { transform: `rotate(${18 * dirSign}deg)`, offset: 0.6 },    /* 朝目标猛倒 */
+        { transform: 'rotate(0deg)' }
+      ], { duration: 180, easing: 'ease-out' });
+      handAnim.finished.then(() => handAnim.cancel()).catch(() => {});
+    }
+
+    // 逐块起飞（间隔 90ms 的节奏感），等待全部落地
+    const flights = [];
+    for (let j = 0; j < n; j++) flights.push(flyOne(j));
+    await Promise.all(flights);
+
+    // —— 稀有奖励：哼唧彩蛋（ASMR 级别，只有稀疏触发才不腻）——
+    // ① 本次倒水直接把目标管倒满 4 块同色；② 连续 3 次操作无报错。
+    // 每次动作最多响一次；playbackRate 1.15 + preservesPitch=false → 升调更奶
+    cleanStreak++;
+    if (completedTube) {
+      // 归类成功的庆祝音在下方 completedTube 分支播 purrAudio，
+      // 哼唧彩蛋让位——两种猫叫同时响会糊成一团
+      cleanStreak = 0;
+    } else if (cleanStreak >= 3) {
+      cleanStreak = 0;
+      playClip(hmmAudio, 0.3, 1.15);
+    }
+
+    // —— 全部落地后：通关反馈 / 被压委屈脸 ——
+    if (completedTube && toEl) {
+      // 整管 4 只猫集体 ^ω^ 庆祝脸 + 金色光晕 + 爱心粒子 + 呼噜庆祝
+      setFace(toEl.querySelectorAll('.face'), '^ω^', 1000);
+      toEl.classList.remove('dimmed');   // 压暗的 brightness(0.7) 与金光同属 filter，摘掉避免互相干扰
+      toEl.classList.add('gold-glow');
+      setTimeout(() => toEl.classList.remove('gold-glow'), 1000);
+      spawnHearts(toEl, 4);   // 管口喷 4 个爱心
+      playClip(purrAudio, 0.5);   // 归类庆祝：呼噜音量拉到 0.5，和撸猫的 0.2 区分开
+    } else if (toEl && baseLayers >= 2 && Math.random() < 0.30) {
+      // 被压在最底下的那只猫，30% 概率露出 >_< 委屈脸
+      const bottomFace = toEl.firstElementChild?.querySelector('.face');
+      if (bottomFace) setFace(bottomFace, '>_<', 500);
+    }
+
+    // 最后一次落地缓冲收尾后，按优先级依次检查终局：
+    // ① 胜利 > ② 步数耗尽 > ③ 死局无路可走
+    await wait(380);
+    checkWin(completedTube ? to : null);   // 胜利时从刚完成的这管开始连锁点亮
+    checkStepOverflow();
+    checkDeadlock();
+  } finally {
+    isAnimating = false; // 兜底解锁：无论动画是否异常都不会卡死操作
+  }
+
+  /* 单块果冻的抛物线飞行（Web Animations API）——起跳蓄力 + 空中翻滚 + 落地开心脸 */
+  async function flyOne(j) {
+    await wait(j * 90);   // 逐块起飞节奏
+    const r = startRects[j];
+
+    // 翻滚方向：±1 随机，决定小猫向左还是向右翻
+    const tiltDir = Math.random() < 0.5 ? 1 : -1;
+
+    // 克隆体：脱离文档流的绝对定位果冻块（飞行途中带猫咪 PNG 与表情）
+    const clone = document.createElement('div');
+    clone.className = 'layer fly ' + topColor;
+    clone.style.width  = layerW + 'px';
+    clone.style.height = layerH + 'px';
+    clone.style.background = catBg(topColor);
+    clone.innerHTML = '<span class="face">' + faceHtml('•ω•') + '</span>';
+    // 防闪帧根本手段：用 left/top（布局属性）把克隆体静态钉在源管起点。
+    // 动画尚未生效的任何一帧，元素都画在源管上（与动画第 0 帧重合，肉眼无感），
+    // 而不可能出现在 left:0,top:0 的屏幕左上角
+    const ox = r.left, oy = r.top;
+    clone.style.left = ox + 'px';
+    clone.style.top  = oy + 'px';
+    document.body.appendChild(clone);
+
+    // 目标格：管内第 baseLayers + j 格（自下而上，含 2px 块间距）
+    const slot = baseLayers + j;
+    const slotX = tubeRect.left;
+    const slotY = tubeRect.bottom - slot * (layerH + GAP) - layerH;
+    // 管口落点：块底刚好没入玻璃口，无论管里已有几块，一律从管口往下放
+    const mouthY = tubeRect.top - layerH + 4;
+
+    // —— 轨迹两段式（transform 全部相对 left/top 基准，让小猫翻个跟头再回正）——
+    const frames = [];
+    // 起跳瞬间：先原地蓄力（不移动），轻微纵向拉伸像弹簧压缩
+    frames.push({
+      transform: `translate(0px, 0px) scale(0.85, 1.15) rotate(0deg)`,
+      offset: 0
+    });
+
+    // ① 抛物线段：源管顶部 → 目标管口正上方，二次贝塞尔采样
+    const STEPS = 8;
+    const ctrlX = (r.left + slotX) / 2;
+    const ctrlY = Math.min(r.top, mouthY) - 70 - Math.abs(slotX - r.left) * 0.08;
+    for (let s = 0; s <= STEPS; s++) {
+      const t = s / STEPS, inv = 1 - t;
+      const px = inv * inv * r.left + 2 * inv * t * ctrlX + t * t * slotX;
+      const py = inv * inv * r.top  + 2 * inv * t * ctrlY + t * t * mouthY;
+      // sin(πt) 从 0→1→0，幅度 ±25° 像探头张望，保留萌态不翻过去
+      const rot = tiltDir * 25 * Math.sin(t * Math.PI);
+      // 高频微抖动：sin(t * π * 6) 每秒 6 次，幅度 ±4%，像果冻自己晃
+      const wobble = Math.sin(t * Math.PI * 6) * 0.04;
+      const sx = (1 + wobble).toFixed(3);
+      const sy = (1 - wobble).toFixed(3);
+      frames.push({
+        transform: `translate(${(px - ox).toFixed(1)}px, ${(py - oy).toFixed(1)}px) rotate(${rot.toFixed(1)}deg) scale(${sx}, ${sy})`,
+        offset: 0.03 + t * 0.52   // 起始 3% 留给蓄力帧
+      });
+    }
+
+    // ② 下落段：从管口竖直坠入目标格，y 按 t² 加速，纵向逐渐拉伸
+    const FALL = 4;
+    for (let s = 1; s <= FALL; s++) {
+      const t = s / FALL;
+      const py = mouthY + (slotY - mouthY) * t * t;
+      const scaleX = 1 - 0.06 * t;
+      const scaleY = 1 + 0.10 * t;
+      // 下落时探头回正，幅度同步衰减
+      const rot = tiltDir * 25 * Math.sin(Math.PI + t * Math.PI) * (1 - t);
+      frames.push({
+        transform: `translate(${(slotX - ox).toFixed(1)}px, ${(py - oy).toFixed(1)}px) rotate(${rot.toFixed(1)}deg) scale(${scaleX.toFixed(2)}, ${scaleY.toFixed(2)})`,
+        offset: 0.55 + 0.45 * t
+      });
+    }
+
+    // fill:'both'：backwards fill 在动画 pending（startTime 未解析）阶段就钉住第 0 帧，
+    // 配合 left/top 基准，任何时刻克隆体都只可能出现在正确位置
+    const anim = clone.animate(frames, { duration: 440, fill: 'both' });
+
+    try { await anim.finished; } catch (e) { /* 动画被中断也继续落地流程 */ }
+    clone.remove();
+
+    // —— 落地瞬间：真实果冻块补入目标管 DOM ——
+    const layer = document.createElement('div');
+    layer.className = 'layer ' + topColor;
+    layer.style.background = catBg(topColor);
+    layer.innerHTML = '<span class="face">' + faceHtml('•ω•') + '</span>';
+    toEl.appendChild(layer);
+
+    // 落地重量 w：目标管顶部连续同色段的长度（1 轻 → 4 满管）。
+    // 注意不能直接用 baseLayers 或整管同色总数：目标管可能混色、底部还可能压着
+    // 被隔开的散色（如 [蓝,红,蓝] 再倒蓝），只有顶部连续同色段才算"已归类"。
+    // pour 后段长 = 原段长 + n，减去还在空中的 n-j-1 块 = 这块落地瞬间的段长
+    let run = 0;
+    for (let k = tubes[to].length - 1; k >= 0 && tubes[to][k] === topColor; k--) run++;
+    const w = run - (n - j - 1);
+    const wT = (w - 1) / 3;   // 归一化 0 → 1
+
+    // 打击感三段式：瞬间压扁 → 保持 50ms（顿帧）→ 强力过冲回弹
+    // 压扁幅度随重量：scale(1.12, 0.85) 轻 → scale(1.25, 0.70) 满管
+    const sx = 1.12 + wT * 0.13;
+    const sy = 0.85 - wT * 0.15;
+    layer.animate([
+      { transform: `scale(${sx.toFixed(3)}, ${sy.toFixed(3)})`, offset: 0 },
+      { transform: `scale(${sx.toFixed(3)}, ${sy.toFixed(3)})`, offset: 0.18, easing: 'cubic-bezier(0.34, 1.56, 0.64, 1)' },
+      { transform: 'scale(0.95, 1.06)', offset: 0.62, easing: 'ease-out' },
+      { transform: 'scale(1, 1)', offset: 1 }
+    ], { duration: 280, easing: 'linear' });   // 280ms × 0.18 ≈ 50ms 顿帧保持
+
+    // 落地开心脸：这块小猫变成 >ω< 眯眼开心 300ms
+    const face = layer.querySelector('.face');
+    if (face) setFace(face, '>ω<', 300);
+
+    // 整管液面"下压 → 回弹"缓冲
+    bounceTube(toEl);
+    // 管口上方飞溅同色粒子：3 个（轻）→ 6 个（满管）
+    spawnParticles(toEl, topColor, 2 + w);
+    // 落地音效：清脆的"啵"声（逐块音高上行），音量 0.3（轻）→ 0.6（满管）
+    playSound('pour', j, 0.3 + wT * 0.3);
+    // 整屏震动：0.3（轻）→ 1.0（满管），满管那一下比旧版统一 0.55 更有"砸实"感
+    shakeScreen(0.3 + wT * 0.7);
+  }
+}
+
+function pour(from, to) {
+  const fromTop = tubes[from][tubes[from].length - 1];
+  while (
+    tubes[from].length > 0 &&
+    tubes[from][tubes[from].length - 1] === fromTop &&
+    tubes[to].length < TUBE_CAP
+  ) {
+    tubes[to].push(tubes[from].pop());
+  }
+}
+
+// ============ 胜利判定 ============
+// lastDone：本次倒水刚归类完成的管号（连锁庆祝从它开始点亮），无则传 null
+function checkWin(lastDone) {
+  // 严格胜利：每个试管要么空，要么装满且同色
+  const win = tubes.every(tube =>
+    tube.length === 0 ||
+    (tube.length === TUBE_CAP && tube.every(c => c === tube[0]))
+  );
+  if (!win) return;
+
+  gameOver = true;   // 赢了也锁定，防止继续倒水
+  setBestSteps(level, steps);   // 更新本关最佳步数（只保留更小的）
+  if (targetSteps === 0) setStars(level, calcStars(steps));   // 仅简单模式存历史最高星
+
+  // —— 通关连锁庆祝：一管一管点亮，而不是全部同时"轰"一声 ——
+  // 从最后归类完成的那管开始，每隔 200ms 点亮下一管满色管：
+  // 金色光晕脉冲 + 猫咪集体跳一下（scaleY 1.1）+ 喷 2 个爱心 + 音高上行的"啵"
+  const fullIdx = tubes
+    .map((t, i) => (t.length === TUBE_CAP && t.every(c => c === t[0])) ? i : -1)
+    .filter(i => i >= 0);
+  const order = (typeof lastDone === 'number' && fullIdx.includes(lastDone))
+    ? [lastDone, ...fullIdx.filter(i => i !== lastDone)]
+    : fullIdx;
+
+  order.forEach((ti, k) => {
+    setTimeout(() => {
+      // 连锁期间玩家点了"重开/选关"→ 新关卡已开始（gameOver 被重置），放弃残留节拍
+      if (!gameOver) return;
+      const el = tubeEl(ti);
+      if (!el) return;
+      // 重新触发光晕脉冲（最后一管可能还带着完成时的 gold-glow，先摘再戴强制重播）
+      el.classList.remove('dimmed');   // 金光属于 filter，压暗也是 filter，摘掉防盖
+      el.classList.remove('gold-glow');
+      void el.offsetWidth;
+      el.classList.add('gold-glow');
+      // 整管猫咪从下到上依次跳一下（层层 40ms 小错峰，像波浪）
+      el.querySelectorAll('.layer').forEach((layer, li) => {
+        layer.animate([
+          { transform: 'translateY(0) scale(1, 1)' },
+          { transform: 'translateY(-7px) scale(0.95, 1.1)', offset: 0.4 },
+          { transform: 'translateY(0) scale(1, 1)' }
+        ], { duration: 300, delay: li * 40, easing: 'ease-out' });
+      });
+      spawnHearts(el, 2);          // 管口喷 2 个爱心
+      playSound('pour', k, 0.4);   // 音高逐管上行，"哒哒哒哒"的节奏
+    }, k * 200);
+  });
+
+  // 连锁跑完再上胜利音乐 + 弹窗，节奏不断档
+  const chainDur = Math.max(0, (order.length - 1) * 200) + 380;
+  setTimeout(() => {
+    if (!gameOver) return;   // 连锁期间被重开/换关，弹窗不再出场
+    playSound('win');
+    showWinModal();
+  }, chainDur);
+}
+
+// ============ 困难模式步数耗尽判定 ============
+function checkStepOverflow() {
+  if (targetSteps <= 0) return;                // 简单模式不判定
+  if (gameOver) return;                       // 赢了不判输
+  if (steps > targetSteps) {
+    gameOver = true;
+    showLoseModal('steps');
+  }
+}
+
+// ============ 死局检测：是否还有任意一步合法倒水 ============
+// 遍历所有试管两两配对，存在 canPour(i,j) 则返回 true
+// 若没有合法操作且未通关，判死局 → 失败
+function checkDeadlock() {
+  if (gameOver) return;                       // 已经在终局了不重复判
+  const n = tubes.length;
+  for (let i = 0; i < n; i++) {
+    for (let j = 0; j < n; j++) {
+      if (i !== j && canPour(i, j)) return;   // 还有合法操作，没事
+    }
+  }
+  // 全遍历完没找到任何合法操作 → 死局
+  gameOver = true;
+  showLoseModal('deadlock');
+}
+
+// ============ 失败弹窗（两种失败原因复用同一套 UI）============
+function showLoseModal(reason) {
+  document.querySelectorAll('.win-overlay').forEach(el => el.remove());
+
+  let mainText, subText;
+  if (reason === 'deadlock') {
+    mainText = '无路可走啦！';
+    subText  = '再倒一步都不行啦，猫咪先歇会儿～';
+  } else {
+    mainText = '步数用尽，猫咪卡住了！';
+    subText  = `已用 ${steps} 步，上限 ${targetSteps} 步`;
+  }
+
+  const overlay = document.createElement('div');
+  overlay.className = 'win-overlay lose-overlay';
+  overlay.innerHTML = `
+    <div class="win-card lose-card">
+      <h2>(=；ω；=)</h2>
+      <p>${mainText}</p>
+      <p style="font-size:12px;opacity:0.65;margin-top:8px;color:#ffc3c3;">
+        ${subText}
+      </p>
+      <button class="btn btn-primary" style="margin-top:20px;" onclick="restartLevel()">
+        再来一次
+      </button>
+    </div>
+  `;
+  document.body.appendChild(overlay);
+}
+
+// ============ 通关弹窗 + 彩带（防重叠）============
+function showWinModal() {
+  // 先清空上一批彩带和弹窗
+  document.querySelectorAll('.confetti').forEach(el => el.remove());
+  document.querySelectorAll('.win-overlay').forEach(el => el.remove());
+
+  const best  = getBestSteps(level);
+  const hard  = targetSteps > 0;
+  const modeLabel = hard
+    ? `困难模式 · 目标 ${targetSteps} 步`
+    : `简单模式 · ${colorCount} 色`;
+
+  let extra = '';
+  if (hard) {
+    // 困难模式：只有步数对比，不评星（步数限制本身就是奖励）
+    extra = `<div class="win-stats">
+      <span>🐾 用 ${steps} 步（限制 ${targetSteps}）</span>
+      ${best > 0 && best !== steps ? `<span>最佳 ${best} 步</span>` : `<span>🏆 新纪录！</span>`}
+    </div>`;
+  } else {
+    // 简单模式：完整星级 + 门槛 + 历史最高
+    const stars = calcStars(steps);
+    const hist  = getStars(level);
+    const starsStr = Array.from({length: 3}, (_, i) => i < stars ? '⭐' : '☆').join('');
+    const histStr  = Array.from({length: 3}, (_, i) => i < hist  ? '⭐' : '☆').join('');
+    const t = starThresholds();
+    const thr = `3⭐≤${t.three}步　2⭐≤${t.two}步`;
+    extra = `
+      <div class="win-stars">${starsStr}</div>
+      <div class="win-thresholds">${thr}</div>
+      <div class="win-stats">
+        <span>🐾 用 ${steps} 步</span>
+        ${best > 0 && best !== steps ? `<span>最佳 ${best} 步</span>` : (steps === best ? `<span>🏆 新纪录！</span>` : '')}
+      </div>
+      ${hist >= 1 ? `<div class="win-history">历史最高：${histStr}</div>` : ''}
+    `;
+  }
+
+  const overlay = document.createElement('div');
+  overlay.className = 'win-overlay';
+  overlay.innerHTML = `
+    <div class="win-card">
+      <h2>(=^･ｪ･^=) Meow!</h2>
+      <p>第 ${level} 关通过 · ${modeLabel}</p>
+      ${extra}
+    </div>
+  `;
+  document.body.appendChild(overlay);
+
+  // 生成彩带
+  const colors = ['#ff6b6b', '#4dabf7', '#51cf66', '#ffd43b', '#cc5de8', '#ff922b'];
+  for (let i = 0; i < 50; i++) {
+    const c = document.createElement('div');
+    c.className = 'confetti';
+    c.style.left = Math.random() * 100 + 'vw';
+    c.style.background = colors[Math.floor(Math.random() * colors.length)];
+    c.style.animationDuration = (1 + Math.random() * 1.5) + 's';
+    c.style.animationDelay = Math.random() * 0.5 + 's';
+    c.style.borderRadius = Math.random() > 0.5 ? '50%' : '2px';
+    document.body.appendChild(c);
+  }
+
+  // 展示 2.2 秒后自动进入下一关（让玩家看清星级门槛）
+  setTimeout(() => {
+    overlay.remove();
+    document.querySelectorAll('.confetti').forEach(el => el.remove());
+    initLevel(level + 1);
+  }, 2200);
+}
+
+// ============ 选关面板 ============
+// 根据当前 level 决定可解锁的关卡范围：
+// - LEVELS 固定关卡（前 10 关）全部可选
+// - 困难模式 >10：只允许选 <= 当前 level 的关卡（避免跳关生成未见过的盘面）
+//   不过也可以让玩家选已解锁的——取 max(10, level) 作为上限
+function showLevelPicker() {
+  if (isAnimating || isEntering) return;
+  resetLoveTimer();   // 打开选关面板 → 打断空闲计时
+  document.querySelectorAll('.level-picker').forEach(el => el.remove());
+
+  // 最大可选关卡 = 当前关卡（不允许跳到没打过的关卡）
+  const maxPick = level;
+  // 总展示 20 个关卡按钮（前 10 固定 + 后 10 动态）
+  const total = Math.max(20, maxPick);
+
+  let gridHtml = '';
+  for (let i = 1; i <= total; i++) {
+    const cls = i === level ? 'level-btn current' : 'level-btn';
+    const disabled = i > maxPick ? 'disabled' : '';
+    const s = getStars(i);   // 本关历史最高星
+    const starStr = s > 0
+      ? Array.from({length: 3}, (_, k) => k < s ? '★' : '☆').join('')
+      : '';
+    const starHtml = starStr ? `<span class="btn-stars">${starStr}</span>` : '';
+    gridHtml += `<button class="${cls}" ${disabled} onclick="gotoLevel(${i})"><span>${i}</span>${starHtml}</button>`;
+  }
+
+  const overlay = document.createElement('div');
+  overlay.className = 'level-picker';
+  overlay.innerHTML = `
+    <div class="level-picker-card">
+      <h3>🐾 选 择 关 卡</h3>
+      <div class="level-grid">${gridHtml}</div>
+      <button class="level-picker-close" onclick="closeLevelPicker()">关闭</button>
+    </div>
+  `;
+  document.body.appendChild(overlay);
+}
+
+function closeLevelPicker() {
+  document.querySelectorAll('.level-picker').forEach(el => el.remove());
+}
+
+function gotoLevel(n) {
+  closeLevelPicker();
+  if (isAnimating || isEntering) return;
+  meltAway(() => initLevel(n));   // 旧盘面先融化，再进新关
+}
+
+// ============ 重开本关 ============
+function restartLevel() {
+  if (isAnimating || isEntering) return;
+  meltAway(() => initLevel(level));   // 旧盘面先融化，再重开
+}
+
+// ============ 撤销一步 ============
+// 恢复上一次倒水前的 tubes/steps 状态；失败/胜利弹窗后禁用；
+// 游戏结束时也禁用（步数超了就是超了，不能靠撤销擦屁股）。
+// 视觉不是"啪"一下瞬移：对比 lastState 与当前 tubes 找出被倒走的那 n 块，
+// 让它们从目标管抛物线飞回源管（flyOne 同一套两段式轨迹，方向相反），落地后才 render 最终态
+async function undoStep() {
+  if (isAnimating || isEntering || gameOver) return;
+  if (!lastState) return;
+  resetLoveTimer();
+
+  // —— 对比找出"倒回去"的三要素 ——
+  // src：当前比 lastState 多了 n 块的管（倒水时的目标，要把块吐回去）
+  // dst：当前比 lastState 少的管（倒水时的源，要接回这些块）
+  let src = -1, dst = -1;
+  for (let i = 0; i < tubes.length; i++) {
+    const diff = tubes[i].length - lastState.tubes[i].length;
+    if (diff > 0) src = i;
+    else if (diff < 0) dst = i;
+  }
+  const n = src >= 0 ? tubes[src].length - lastState.tubes[src].length : 0;
+  const color = src >= 0 ? tubes[src][tubes[src].length - 1] : null;
+
+  // 找不到差异（理论上不会发生）→ 退化为原来的瞬移回滚
+  if (src < 0 || dst < 0 || n <= 0 || !color) { applyUndo(); return; }
+
+  isAnimating = true;
+  selected = null;
+  // 撤销按钮立刻禁用，防止动画期间连点
+  const ub0 = document.getElementById('undoBtn');
+  if (ub0) ub0.disabled = true;
+
+  try {
+    // —— 数据回滚前：测量起飞坐标（src 管顶部 n 块的屏幕位置）——
+    const srcEl = tubeEl(src);
+    const srcLayers = srcEl.querySelectorAll('.layer');
+    const startRects = [];
+    const srcLen = tubes[src].length;
+    for (let j = 0; j < n; j++) {
+      startRects.push(srcLayers[srcLen - n + j].getBoundingClientRect());
+    }
+
+    // —— 数据先行回滚（与 tryPour 同一原则：数据先行、视觉后补）——
+    // 回滚后 dst 管顶部 n 块就是"飞回中"的块 → render 时压制不显示；
+    // src 管立刻变短，旧位置的块由飞行克隆体接管（和倒水时源管块消失同理）
+    tubes = lastState.tubes;
+    steps = lastState.steps;
+    level = lastState.level;
+    targetSteps = lastState.targetSteps;
+    lastState = null;           // 单步撤销，撤完就没了
+    render({ hideTop: { tube: dst, count: n } });
+    updateStepsUI();
+    saveState();
+
+    // render 重建了 DOM，必须重新获取节点、重测几何（同 tryPour 的教训）
+    const dstEl = tubeEl(dst);
+    const dstRect = dstEl.getBoundingClientRect();
+    const GAP = 2;
+    const dstStyle = getComputedStyle(dstEl);
+    const layerH = (dstEl.clientHeight
+                    - parseFloat(dstStyle.paddingTop)
+                    - parseFloat(dstStyle.paddingBottom)) * 0.25 - 2;
+    const layerW = dstEl.clientWidth;
+    const baseLayers = tubes[dst].length - n;   // 回滚后 dst 管可见块数（飞回块落在其上）
+
+    // 逐块飞回（间隔 90ms，与倒水同节奏），等待全部回家
+    try {
+      const flights = [];
+      for (let j = 0; j < n; j++) flights.push(flyBack(j));
+      await Promise.all(flights);
+    } catch (e) {
+      // 飞行异常不致命：继续走下面的最终 render——
+      // 绝不能让 hideTop 压制的果冻块因为一次动画异常就永久从画面消失
+    }
+
+    await wait(120);
+    render();   // 落地缓冲收尾后，render 最终态（清掉 hideTop 压制与临时 DOM）
+  } catch (e) {
+    render();   // 兜底：任何中断都用已回滚的数据重渲染，保证画面与数据一致
+    // 若异常发生在回滚之前（lastState 还在），把撤销按钮恢复可用，别把撤销通道锁死
+    if (lastState) {
+      const ub = document.getElementById('undoBtn');
+      if (ub) ub.disabled = false;
+    }
+  } finally {
+    isAnimating = false;
+  }
+
+  /* 单块果冻飞回源管：与 flyOne 相同的两段式抛物线（方向相反），
+     落地即时补真实 DOM + 果冻 squash + 粒子 + "啵"声 */
+  async function flyBack(j) {
+    await wait(j * 90);
+    const r = startRects[j];
+    const tiltDir = Math.random() < 0.5 ? 1 : -1;
+
+    const clone = document.createElement('div');
+    clone.className = 'layer fly ' + color;
+    clone.style.width  = layerW + 'px';
+    clone.style.height = layerH + 'px';
+    clone.style.background = catBg(color);
+    clone.innerHTML = '<span class="face">' + faceHtml('•ω•') + '</span>';
+    // 同 flyOne：left/top 静态钉在源管起点，动画未生效时也不会画到屏幕左上角
+    const ox = r.left, oy = r.top;
+    clone.style.left = ox + 'px';
+    clone.style.top  = oy + 'px';
+    document.body.appendChild(clone);
+
+    const slot  = baseLayers + j;
+    const slotX = dstRect.left;
+    const slotY = dstRect.bottom - slot * (layerH + GAP) - layerH;
+    const mouthY = dstRect.top - layerH + 4;
+
+    const frames = [];
+    frames.push({
+      transform: `translate(0px, 0px) scale(0.85, 1.15) rotate(0deg)`,
+      offset: 0
+    });
+    const STEPS = 8;
+    const ctrlX = (r.left + slotX) / 2;
+    const ctrlY = Math.min(r.top, mouthY) - 70 - Math.abs(slotX - r.left) * 0.08;
+    for (let s = 0; s <= STEPS; s++) {
+      const t = s / STEPS, inv = 1 - t;
+      const px = inv * inv * r.left + 2 * inv * t * ctrlX + t * t * slotX;
+      const py = inv * inv * r.top  + 2 * inv * t * ctrlY + t * t * mouthY;
+      const rot = tiltDir * 25 * Math.sin(t * Math.PI);
+      const wobble = Math.sin(t * Math.PI * 6) * 0.04;
+      frames.push({
+        transform: `translate(${(px - ox).toFixed(1)}px, ${(py - oy).toFixed(1)}px) rotate(${rot.toFixed(1)}deg) scale(${(1 + wobble).toFixed(3)}, ${(1 - wobble).toFixed(3)})`,
+        offset: 0.03 + t * 0.52
+      });
+    }
+    const FALL = 4;
+    for (let s = 1; s <= FALL; s++) {
+      const t = s / FALL;
+      const py = mouthY + (slotY - mouthY) * t * t;
+      const rot = tiltDir * 25 * Math.sin(Math.PI + t * Math.PI) * (1 - t);
+      frames.push({
+        transform: `translate(${(slotX - ox).toFixed(1)}px, ${(py - oy).toFixed(1)}px) rotate(${rot.toFixed(1)}deg) scale(${(1 - 0.06 * t).toFixed(2)}, ${(1 + 0.10 * t).toFixed(2)})`,
+        offset: 0.55 + 0.45 * t
+      });
+    }
+
+    // fill:'both' + left/top 基准：动画 pending 阶段也只在源管位置显示
+    const anim = clone.animate(frames, { duration: 440, fill: 'both' });
+    try { await anim.finished; } catch (e) { /* 中断也继续落地流程 */ }
+    clone.remove();
+
+    // 落地：真实果冻块补回源管 DOM
+    const layer = document.createElement('div');
+    layer.className = 'layer ' + color;
+    layer.style.background = catBg(color);
+    layer.innerHTML = '<span class="face">' + faceHtml('•ω•') + '</span>';
+    dstEl.appendChild(layer);
+    layer.animate([
+      { transform: 'scale(1.2, 0.8)', offset: 0 },
+      { transform: 'scale(1.2, 0.8)', offset: 0.18, easing: 'cubic-bezier(0.34, 1.56, 0.64, 1)' },
+      { transform: 'scale(0.95, 1.06)', offset: 0.62, easing: 'ease-out' },
+      { transform: 'scale(1, 1)', offset: 1 }
+    ], { duration: 280, easing: 'linear' });
+    const face = layer.querySelector('.face');
+    if (face) setFace(face, '>ω<', 300);   // 回家也开心一下
+    bounceTube(dstEl);
+    spawnParticles(dstEl, color, 3);
+    playSound('pour', j, 0.35);
+  }
+}
+
+/* 无动画的瞬时回滚（兜底：找不到倒回差异时才走这里） */
+function applyUndo() {
+  tubes = lastState.tubes;
+  steps = lastState.steps;
+  level = lastState.level;
+  targetSteps = lastState.targetSteps;
+  lastState = null;
+  selected = null;
+  render();
+  updateStepsUI();
+  saveState();
+  const ub = document.getElementById('undoBtn');
+  if (ub) ub.disabled = true;
+}
+
+// ============ 启动 ============
+// 优先从存档恢复上次进度，否则从第 1 关开始
+const saved = loadState();
+if (saved) {
+  initLevel(saved.level, { tubes: saved.tubes, steps: saved.steps, targetSteps: saved.targetSteps });
+} else {
+  initLevel(1);
+}
+initPaws();
+
+// 首次进入（没有任何存档、也没看过引导）→ 欢迎弹窗；看完记录标记，之后不再打扰
+let seenWelcome = false;
+try { seenWelcome = !!localStorage.getItem(WELCOME_KEY); } catch (e) {}
+if (!saved && !seenWelcome) showWelcome();
+
+// ============ 全局音频解锁 ============
+// iOS 微信/Safari 的铁律：必须由真实用户手势触发才允许出声。
+// 第一次 pointerdown 时一次性把 Web Audio 与 HTML5 Audio 都"点着"，之后 playClip 才不会静默失败
+document.addEventListener('pointerdown', function unlockAudio() {
+  // ① 激活 Web Audio：resume 必须发生在手势回调内
+  try {
+    if (!audioCtx && (window.AudioContext || window.webkitAudioContext)) {
+      audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+    }
+    if (audioCtx && audioCtx.state === 'suspended') audioCtx.resume();
+  } catch (e) { /* 音频不可用不影响游戏 */ }
+  // ② 用一段 0 音量的静音 wav 解锁 HTML5 Audio（iOS 只认"真实播放过"的元素）
+  try {
+    const silent = new Audio('data:audio/wav;base64,UklGRiQAAABXQVZFZm10IBAAAAABAAEARKwAAIhYAQACABAAZGF0YQAAAAA=');
+    silent.volume = 0;
+    const p = silent.play();
+    if (p && p.catch) p.catch(() => {});
+  } catch (e) { /* 忽略 */ }
+  // ③ 解锁后立刻移除监听，不干扰后续操作
+  document.removeEventListener('pointerdown', unlockAudio);
+}, { once: true });
+</script>
+</body>
+</html>
