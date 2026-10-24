@@ -1518,7 +1518,7 @@ function playSound(type, step, vol) {
 // 摇晃手机 → 整排试管惯性晃动 + 猫咪委屈哭泣脸 + 轻微嘤嘤声
 // PC 端无 DeviceMotionEvent 时全部静默失败，绝不报错卡死
 (function () {
-  const SHAKE_THRESHOLD = 300;   // 三轴加速度变化量之和的触发阈值（实测可调）
+  const SHAKE_THRESHOLD = 25;    // 三轴加速度变化量的欧氏距离阈值（sqrt 后），适配大部分手机普通摇晃幅度
   const SHAKE_COOLDOWN  = 1500;  // 防抖：触发后 1.5s 内不再重复触发
   const FACE_DURATION   = 800;   // 委屈哭泣脸持续时间
 
@@ -1596,8 +1596,15 @@ function playSound(type, step, vol) {
   function handleMotion(e) {
     const a = e.accelerationIncludingGravity || e.acceleration;
     if (!a || a.x == null) return;
-    const delta = Math.abs(a.x - lastX) + Math.abs(a.y - lastY) + Math.abs(a.z - lastZ);
+
+    // 用三轴变化量的欧氏距离（矢量模长）代替直接相加，更符合真实"摇晃"的物理量度
+    const dx = a.x - lastX;
+    const dy = a.y - lastY;
+    const dz = a.z - lastZ;
+    const delta = Math.sqrt(dx*dx + dy*dy + dz*dz);
+
     lastX = a.x; lastY = a.y; lastZ = a.z;
+
     if (delta > SHAKE_THRESHOLD) onShake();
   }
 
