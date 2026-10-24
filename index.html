@@ -471,6 +471,22 @@
 
   /* ========== 底部按钮：三枚 Q 弹果冻糖 ========== */
   .controls { margin-top: 20px; display: flex; justify-content: center; flex-wrap: wrap; gap: 12px; }
+  /* 移动端摇一摇测试按钮：默认隐藏，JS 检测到移动端后加 .visible 显示 */
+  .shake-test-btn {
+    display: none;
+    margin: 10px auto 0;
+    padding: 6px 16px;
+    font-size: 12px;
+    border-radius: 14px;
+    border: 1px solid rgba(140, 120, 255, 0.4);
+    background: rgba(140, 120, 255, 0.15);
+    color: #c8b8ff;
+    cursor: pointer;
+    backdrop-filter: blur(4px);
+    transition: background 0.2s;
+  }
+  .shake-test-btn.visible { display: block; }
+  .shake-test-btn:active { background: rgba(140, 120, 255, 0.3); }
   .btn {
     padding: 11px 36px;
     font-size: 15px;
@@ -1015,6 +1031,8 @@
     <button class="btn btn-primary" onclick="restartLevel()">重开这局=^•ω•^=</button>
     <button class="btn btn-secondary" onclick="showLevelPicker()">📋 选关</button>
   </div>
+  <!-- 移动端摇一摇测试按钮：默认隐藏，JS 检测到移动端才显示 -->
+  <button class="shake-test-btn" id="shakeTestBtn" onclick="handleShakeTest()">📳 测试摇一摇</button>
 </div>
 
 <script src="levels.js"></script>
@@ -1540,17 +1558,8 @@ function playSound(type, step, vol) {
     } catch (e) { /* 音频不可用静默 */ }
   }
 
-  // 触发一次摇晃反馈
-  function onShake() {
-    const now = Date.now();
-    if (now - lastShake < SHAKE_COOLDOWN) return;   // 防抖
-
-    // 防干扰：正在倒水（抛物线飞行中）、入场动画、或游戏已结束时，不触发摇一摇，
-    // 避免试管乱晃 + 猫咪变哭泣脸打断倒水的视觉连贯性
-    if (isAnimating || isEntering || gameOver) return;
-
-    lastShake = now;
-
+  // 触发一次摇晃反馈（视觉 + 音效），供真实摇晃与测试按钮复用
+  function doShakeFeedback() {
     // A. 试管惯性晃动：重播 shakeInertia 动画
     const row = document.getElementById('tubeRow');
     if (row) {
@@ -1570,6 +1579,19 @@ function playSound(type, step, vol) {
     playWhimper();
   }
 
+  // 触发一次摇晃反馈
+  function onShake() {
+    const now = Date.now();
+    if (now - lastShake < SHAKE_COOLDOWN) return;   // 防抖
+
+    // 防干扰：正在倒水（抛物线飞行中）、入场动画、或游戏已结束时，不触发摇一摇，
+    // 避免试管乱晃 + 猫咪变哭泣脸打断倒水的视觉连贯性
+    if (isAnimating || isEntering || gameOver) return;
+
+    lastShake = now;
+    doShakeFeedback();
+  }
+
   // 加速度计事件：计算三轴变化量，超阈值则判定为摇晃
   function handleMotion(e) {
     const a = e.accelerationIncludingGravity || e.acceleration;
@@ -1580,30 +1602,77 @@ function playSound(type, step, vol) {
   }
 
   // 对外暴露：请求运动权限（iOS 13+ 必需，且必须由用户手势触发）
-  // 移动端在欢迎弹窗「开始撸猫」点击时调用；PC 端直接 resolve(false) 静默跳过
+  // 各分支带 console.log，方便手机连电脑调试"为什么没反应"
   window.requestMotionPermission = function () {
-    if (motionEnabled) return Promise.resolve(true);
-    if (typeof window.DeviceMotionEvent === 'undefined') return Promise.resolve(false);
+    console.log('[摇一摇] requestMotionPermission 被调用，motionEnabled =', motionEnabled);
+    if (motionEnabled) {
+      console.log('[摇一摇] 已授权监听，直接返回 true');
+      return Promise.resolve(true);
+    }
+    if (typeof window.DeviceMotionEvent === 'undefined') {
+      console.log('[摇一摇] 当前浏览器不支持 DeviceMotionEvent，摇一摇不可用');
+      return Promise.resolve(false);
+    }
+    console.log('[摇一摇] DeviceMotionEvent 存在，requestPermission =', typeof DeviceMotionEvent.requestPermission);
     if (typeof DeviceMotionEvent.requestPermission === 'function') {
+      console.log('[摇一摇] iOS 13+：调用 requestPermission() 等待用户授权…');
       return DeviceMotionEvent.requestPermission()
         .then(state => {
+          console.log('[摇一摇] iOS 授权结果 =', state);
           if (state === 'granted') {
             window.addEventListener('devicemotion', handleMotion);
             motionEnabled = true;
+            console.log('[摇一摇] 已挂载 devicemotion 监听');
+          } else {
+            console.log('[摇一摇] 用户拒绝授权，摇一摇不可用');
           }
           return state === 'granted';
         })
-        .catch(() => false);
+        .catch(err => {
+          console.error('[摇一摇] requestPermission 抛错：', err);
+          return false;
+        });
     }
     // 非 iOS 13+（安卓/旧 iOS）：直接监听
     window.addEventListener('devicemotion', handleMotion);
     motionEnabled = true;
+    console.log('[摇一摇] 非 iOS 13+：已直接挂载 devicemotion 监听');
     return Promise.resolve(true);
   };
 
-  // 暴露给 welcome 按钮判断是否需要请求权限
+  // 暴露给测试按钮：手动触发一次摇晃反馈（不受状态锁/防抖限制，用于调试验证）
+  window.testShake = function () {
+    console.log('[摇一摇] 测试按钮触发 doShakeFeedback()');
+    doShakeFeedback();
+  };
+
+  // 暴露给欢迎按钮 / pointerdown 判断是否需要请求权限
   window.isMobileDevice = isMobile;
 })();
+
+// 移动端：显示摇一摇测试按钮（控制按钮下方），方便真机调试
+(function () {
+  if (window.isMobileDevice && window.isMobileDevice()) {
+    const btn = document.getElementById('shakeTestBtn');
+    if (btn) btn.classList.add('visible');
+  }
+})();
+
+// 测试按钮点击：强行请求权限 → 成功则手动触发一次摇一摇反馈，失败弹原生提示
+function handleShakeTest() {
+  if (window.requestMotionPermission) {
+    window.requestMotionPermission().then(function (ok) {
+      console.log('[摇一摇] 测试按钮权限结果 =', ok);
+      if (ok) {
+        window.testShake && window.testShake();   // 猫咪哭一下，证明代码通路正常
+      } else {
+        alert('请检查系统设置是否允许访问运动与方向');
+      }
+    });
+  } else {
+    alert('请检查系统设置是否允许访问运动与方向');
+  }
+}
 
 // 归类满管的"叮咚"上行三连音：纯 Web Audio 合成，替代反复播放的 MP3 呼噜，
 // 解决"每次听起来一模一样"的听觉疲劳。每次调用在音高/节奏上加 ±2% 随机抖动。
