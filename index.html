@@ -80,6 +80,13 @@
     0%, 100% { transform: scale(1); }
     50%      { transform: scale(1.06); }
   }
+  /* 通关后状态栏的指引提示：金色，和关卡条粉色区分开 */
+  .level-bar .clear-hint {
+    color: #ffd86b;
+    text-shadow: 0 0 8px rgba(255, 200, 60, 0.55);
+    font-weight: 600;
+    margin-left: 4px;
+  }
 
   /* 实时星级进度条：亮星金色发光、暗星灰色低对比 */
   .star-meter {
@@ -295,6 +302,24 @@
     45%  { transform: scale(0.95, 1.06) skewX(5deg)   rotate(2.5deg); }
     70%  { transform: scale(1.03, 0.98) skewX(-2.5deg) rotate(-1.2deg); }
     100% { transform: scale(1, 1)      skewX(0deg)    rotate(0deg); }
+  }
+
+  /* ========== 移动端「摇一摇」惯性晃动 ==========
+     整排试管像被甩了一下：先大幅左倾 → 右倾回摆 → 递减振荡到静止，
+     像果冻在罐子里撞来撞去。transform-origin 放底部，模拟"拿着罐底甩"的支点。 */
+  .tube-row.shake-wobble {
+    transform-origin: 50% 100%;
+    animation: shakeInertia 0.75s cubic-bezier(0.25, 0.46, 0.45, 0.94);
+  }
+  @keyframes shakeInertia {
+    0%   { transform: translateX(0)     rotate(0deg); }
+    12%  { transform: translateX(-16px) rotate(-4deg); }   /* 猛甩向左 */
+    28%  { transform: translateX(13px)  rotate(3.2deg); }  /* 惯性回摆向右 */
+    44%  { transform: translateX(-8px)  rotate(-1.8deg); } /* 再向左，幅度减半 */
+    60%  { transform: translateX(5px)   rotate(1.1deg); }
+    76%  { transform: translateX(-3px)  rotate(-0.6deg); }
+    90%  { transform: translateX(1.5px) rotate(0.3deg); }
+    100% { transform: translateX(0)     rotate(0deg); }
   }
 
   /* 落地缓冲：多次递减振荡，像果冻砸到桌面会弹好几下 */
@@ -616,6 +641,49 @@
     opacity: 0.30;
     cursor: not-allowed;
   }
+  /* 无尽模式长条卡片：独占一行，磨砂玻璃 + 青紫渐变 + 微发光，凸显特殊地位 */
+  .endless-card {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 10px;
+    width: 100%;
+    margin-top: 18px;
+    padding: 14px 20px;
+    border: 1px solid rgba(150,200,255,0.45);
+    border-radius: 14px;
+    background: linear-gradient(135deg, rgba(120,180,255,0.28), rgba(180,120,255,0.24));
+    backdrop-filter: blur(10px);
+    -webkit-backdrop-filter: blur(10px);
+    box-shadow:
+      0 4px 16px rgba(120,140,255,0.25),
+      0 0 18px rgba(150,180,255,0.18),
+      inset 0 1px 0 rgba(255,255,255,0.25);
+    color: #e6f0ff;
+    font-size: 15px;
+    font-weight: 600;
+    letter-spacing: 1px;
+    cursor: pointer;
+    transition: transform 0.15s ease, box-shadow 0.2s ease, filter 0.2s ease;
+    text-align: center;
+  }
+  .endless-card:hover:not(.locked) {
+    transform: translateY(-2px);
+    box-shadow:
+      0 6px 22px rgba(120,140,255,0.38),
+      0 0 28px rgba(150,180,255,0.30),
+      inset 0 1px 0 rgba(255,255,255,0.30);
+    filter: brightness(1.06);
+  }
+  .endless-card:active:not(.locked) { transform: translateY(0) scale(0.99); }
+  .endless-card-icon { font-size: 18px; font-weight: 700; color: #b8d4ff; }
+  .endless-card.locked {
+    cursor: not-allowed;
+    opacity: 0.55;
+    background: rgba(255,255,255,0.06);
+    border-color: rgba(255,255,255,0.18);
+    box-shadow: none;
+  }
   .btn-stars {
     display: block;
     font-size: 11px;
@@ -707,6 +775,27 @@
       inset 0 2px 0 rgba(255,255,255,0.55),
       inset 0 -3px 10px rgba(180,40,95,0.30);
   }
+
+  /* 无尽模式入口弹窗的按钮组：横向居中排列，两个按钮之间留白 */
+  .endless-actions {
+    display: flex;
+    gap: 16px;
+    justify-content: center;
+    align-items: center;
+    margin-top: 26px;
+    flex-wrap: wrap;
+  }
+  .endless-actions .btn-secondary {
+    padding: 14px 26px;
+    font-size: 15px;
+    border-radius: 999px;
+    background: rgba(255,255,255,0.08);
+    color: #e8d8e8;
+    border: 1px solid rgba(255,255,255,0.2);
+    cursor: pointer;
+    transition: background 0.15s;
+  }
+  .endless-actions .btn-secondary:hover { background: rgba(255,255,255,0.15); }
   .win-stars { font-size: 30px; letter-spacing: 6px; margin: 10px 0 6px; }
   .win-stats {
     display: flex; gap: 14px; justify-content: center;
@@ -1043,7 +1132,9 @@ function updateEyeTrack() {
 window.addEventListener('resize', invalidateEyeCache, { passive: true });
 
 // ============ 状态 ============
+const MAIN_LINE_END = 15;     // 主线关卡终点：通关第 15 关后进入无尽模式
 let level = 1;
+let endlessMode = false;      // 是否处于无尽模式（由 level > MAIN_LINE_END 派生，initLevel 里同步）
 let tubes = [];
 let selected = null;
 let isAnimating = false; // 动画锁：倒水飞行期间锁定输入，防止连点穿模
@@ -1053,6 +1144,9 @@ let targetSteps = 0;     // 困难模式下的步数上限（简单模式 = 0）
 let colorCount = 0;      // 当前关卡的颜色数量
 let gameOver = false;    // 步数耗尽锁定（与 isAnimating 分离，避免 finally 解锁覆盖）
 let lastState = null;    // 撤销一步：存上一次 tubes + steps + selected 的快照
+let maxUnlockedLevel = 1; // 最大解锁关卡：通关时推进、选关不回退
+let endlessCache = null;   // 无尽关初始盘面缓存 { level, tubes, targetSteps, colorCount }
+                           // ——"重开这局"复用同一盘面，不重新随机；进下一关时才刷新
 
 // ============ 全局随机眨眼：3~6 秒随机挑一只猫正常眨眼一次 ============
 // 避开 isAnimating / gameOver / 飞行克隆体 / 爱心眼态——只让"静态中的常规猫"眨眼
@@ -1173,6 +1267,7 @@ const SAVE_KEY   = 'jellycats_save_v1';
 const BEST_KEY   = 'jellycats_best_v1';   // 每关最佳步数记录：{ level: steps }
 const WELCOME_KEY = 'jellycats_welcome_v1';   // 首次欢迎引导是否已看过
 const STARS_KEY  = 'jellycats_stars_v1';   // 每关历史最高星级：{ level: 3 }
+const MAX_LEVEL_KEY = 'jellycats_maxlevel_v1'; // 最大解锁关卡：永不回退，独立于当前 level 存档
 
 // 最佳步数存取
 function getBestSteps(lv) {
@@ -1228,6 +1323,7 @@ function saveState() {
       tubes,
       steps,
       targetSteps,
+      endlessCache: endlessMode ? endlessCache : null,   // 无尽关把初始盘面缓存也存上，读档后重开能还原
     };
     localStorage.setItem(SAVE_KEY, JSON.stringify(data));
   } catch (e) { /* localStorage 不可用静默失败 */ }
@@ -1242,6 +1338,17 @@ function loadState() {
     }
   } catch (e) { /* 存档损坏忽略 */ }
   return null;
+}
+
+// 最大解锁关卡：独立于当前关卡存档，选关只覆盖 level、不覆盖 max，保证已通关永不回锁
+function saveMaxLevel() {
+  try { localStorage.setItem(MAX_LEVEL_KEY, String(maxUnlockedLevel)); } catch (e) {}
+}
+function loadMaxLevel() {
+  try {
+    const v = parseInt(localStorage.getItem(MAX_LEVEL_KEY) || '1', 10);
+    return Number.isFinite(v) && v >= 1 ? v : 1;
+  } catch (e) { return 1; }
 }
 
 // ============ 首次欢迎引导 ============
@@ -1293,14 +1400,20 @@ function playSound(type, step, vol) {
       // 果冻落地"啵"声：短促高频正弦波，音高快速下滑 + 弹性音量包络
       // step：第几块落地（0 起），音高逐块升高，形成"啵、啵、啵"的上行节奏
       // vol：落地重量感——目标管同色块越多音量越大（0.3 轻 → 0.6 满管）
-      const pitch = 1 + (typeof step === 'number' ? step * 0.12 : 0);
+      // 无尽模式：整体音高抬高 18%（更紧绷），并叠加一层微弱的"滴答"高频短音，
+      //           营造时钟倒数般的紧张感，区别于主线关卡的从容感
+      const endless = endlessMode;
+      const pitchBase = endless ? 1.18 : 1;
+      const pitch = pitchBase + (typeof step === 'number' ? step * 0.12 : 0);
       const peak  = typeof vol === 'number' ? vol : 0.3;
+      const t = ctx.currentTime;
+
+      // —— 主"啵"声 ——
       const osc = ctx.createOscillator();
       const gain = ctx.createGain();
       osc.connect(gain);
       gain.connect(ctx.destination);
       osc.type = 'sine';
-      const t = ctx.currentTime;
       osc.frequency.setValueAtTime(880 * pitch, t);
       osc.frequency.exponentialRampToValueAtTime(240 * pitch, t + 0.09);
       gain.gain.setValueAtTime(0.001, t);
@@ -1308,6 +1421,24 @@ function playSound(type, step, vol) {
       gain.gain.exponentialRampToValueAtTime(0.001, t + 0.11);  // 弹性衰减
       osc.start(t);
       osc.stop(t + 0.12);
+
+      // —— 无尽模式专属：微弱时钟"滴答" ——
+      // 极短的高频方波（2.4kHz）+ 快速衰减，音量压到 0.04 以下避免刺耳，
+      // 只在每块落地的瞬间轻响一声，像秒针走动
+      if (endless) {
+        try {
+          const tick = ctx.createOscillator();
+          const tg = ctx.createGain();
+          tick.connect(tg); tg.connect(ctx.destination);
+          tick.type = 'square';
+          tick.frequency.setValueAtTime(2400, t);
+          tg.gain.setValueAtTime(0.001, t);
+          tg.gain.exponentialRampToValueAtTime(0.04, t + 0.005);
+          tg.gain.exponentialRampToValueAtTime(0.001, t + 0.05);
+          tick.start(t);
+          tick.stop(t + 0.06);
+        } catch (e) { /* 滴答失败不影响主音效 */ }
+      }
 
     } else if (type === 'error') {
       // 报错：只用低沉稳重的合成哼唧，绝不播猫叫 mp3（尖锐叫声听起来像挨打，很劝退）
@@ -1365,6 +1496,139 @@ function playSound(type, step, vol) {
   } catch(e) { /* 音频不可用静默失败 */ }
 }
 
+// ============ 移动端「摇一摇」体感微交互 ============
+// 摇晃手机 → 整排试管惯性晃动 + 猫咪委屈哭泣脸 + 轻微嘤嘤声
+// PC 端无 DeviceMotionEvent 时全部静默失败，绝不报错卡死
+(function () {
+  const SHAKE_THRESHOLD = 300;   // 三轴加速度变化量之和的触发阈值（实测可调）
+  const SHAKE_COOLDOWN  = 1500;  // 防抖：触发后 1.5s 内不再重复触发
+  const FACE_DURATION   = 800;   // 委屈哭泣脸持续时间
+
+  let lastX = 0, lastY = 0, lastZ = 0;
+  let lastShake = 0;
+  let motionEnabled = false;
+
+  // 是否为移动端：UA 含移动关键字，或（触摸 + 窄屏）
+  function isMobile() {
+    if (typeof navigator === 'undefined') return false;
+    return /Mobi|Android|iPhone|iPad|iPod/i.test(navigator.userAgent)
+      || (('ontouchstart' in window) && window.innerWidth < 900);
+  }
+
+  // 合成一声极其轻微的猫咪"嘤嘤"委屈声：下滑音 + 微弱颤音
+  function playWhimper() {
+    try {
+      const ctx = getAudioCtx();
+      const t = ctx.currentTime;
+      const osc = ctx.createOscillator();
+      const gain = ctx.createGain();
+      osc.connect(gain); gain.connect(ctx.destination);
+      osc.type = 'sine';
+      osc.frequency.setValueAtTime(680, t);
+      osc.frequency.exponentialRampToValueAtTime(380, t + 0.28);   // 委屈地下滑
+      // 微弱颤音：LFO 调制频率，像哭腔的抖音
+      const lfo = ctx.createOscillator();
+      const lfoGain = ctx.createGain();
+      lfo.frequency.value = 14;
+      lfoGain.gain.value = 18;
+      lfo.connect(lfoGain); lfoGain.connect(osc.frequency);
+      gain.gain.setValueAtTime(0.001, t);
+      gain.gain.exponentialRampToValueAtTime(0.08, t + 0.03);
+      gain.gain.exponentialRampToValueAtTime(0.001, t + 0.32);
+      osc.start(t); osc.stop(t + 0.34);
+      lfo.start(t); lfo.stop(t + 0.34);
+    } catch (e) { /* 音频不可用静默 */ }
+  }
+
+  // 触发一次摇晃反馈
+  function onShake() {
+    const now = Date.now();
+    if (now - lastShake < SHAKE_COOLDOWN) return;   // 防抖
+
+    // 防干扰：正在倒水（抛物线飞行中）、入场动画、或游戏已结束时，不触发摇一摇，
+    // 避免试管乱晃 + 猫咪变哭泣脸打断倒水的视觉连贯性
+    if (isAnimating || isEntering || gameOver) return;
+
+    lastShake = now;
+
+    // A. 试管惯性晃动：重播 shakeInertia 动画
+    const row = document.getElementById('tubeRow');
+    if (row) {
+      row.classList.remove('shake-wobble');
+      void row.offsetWidth;   // 强制重排，确保动画重播
+      row.classList.add('shake-wobble');
+      setTimeout(() => row.classList.remove('shake-wobble'), 800);
+    }
+
+    // B. 所有猫咪变成委屈哭泣脸 ;ω;，800ms 后恢复
+    //    先清掉可能残留的爱心眼（.love 粉色发光），否则 setFace 只换 innerHTML，
+    //    .love 类会一直挂着，导致某只猫永远粉色直到下次 idle 重置
+    document.querySelectorAll('.face.love').forEach(f => f.classList.remove('love'));
+    try { setFace('.face', ';ω;', FACE_DURATION); } catch (e) { /* setFace 未就绪 */ }
+
+    // C. 一声轻微嘤嘤
+    playWhimper();
+  }
+
+  // 加速度计事件：计算三轴变化量，超阈值则判定为摇晃
+  function handleMotion(e) {
+    const a = e.accelerationIncludingGravity || e.acceleration;
+    if (!a || a.x == null) return;
+    const delta = Math.abs(a.x - lastX) + Math.abs(a.y - lastY) + Math.abs(a.z - lastZ);
+    lastX = a.x; lastY = a.y; lastZ = a.z;
+    if (delta > SHAKE_THRESHOLD) onShake();
+  }
+
+  // 对外暴露：请求运动权限（iOS 13+ 必需，且必须由用户手势触发）
+  // 移动端在欢迎弹窗「开始撸猫」点击时调用；PC 端直接 resolve(false) 静默跳过
+  window.requestMotionPermission = function () {
+    if (motionEnabled) return Promise.resolve(true);
+    if (typeof window.DeviceMotionEvent === 'undefined') return Promise.resolve(false);
+    if (typeof DeviceMotionEvent.requestPermission === 'function') {
+      return DeviceMotionEvent.requestPermission()
+        .then(state => {
+          if (state === 'granted') {
+            window.addEventListener('devicemotion', handleMotion);
+            motionEnabled = true;
+          }
+          return state === 'granted';
+        })
+        .catch(() => false);
+    }
+    // 非 iOS 13+（安卓/旧 iOS）：直接监听
+    window.addEventListener('devicemotion', handleMotion);
+    motionEnabled = true;
+    return Promise.resolve(true);
+  };
+
+  // 暴露给 welcome 按钮判断是否需要请求权限
+  window.isMobileDevice = isMobile;
+})();
+
+// 归类满管的"叮咚"上行三连音：纯 Web Audio 合成，替代反复播放的 MP3 呼噜，
+// 解决"每次听起来一模一样"的听觉疲劳。每次调用在音高/节奏上加 ±2% 随机抖动。
+function playCompleteChime() {
+  try {
+    const ctx = getAudioCtx();
+    const t0 = ctx.currentTime;
+    const root = [523.25, 659.25, 880.00];   // C5 → E5 → A5，清脆上行
+    const transpose = 1 + (Math.random() - 0.5) * 0.04;   // 整体 ±2% 移调
+    root.forEach((f, i) => {
+      const osc = ctx.createOscillator();
+      const g = ctx.createGain();
+      osc.connect(g); g.connect(ctx.destination);
+      osc.type = 'triangle';
+      const t = t0 + i * (0.11 + Math.random() * 0.04);   // 节奏微抖
+      osc.frequency.setValueAtTime(f * transpose, t);
+      g.gain.setValueAtTime(0.0001, t);
+      g.gain.exponentialRampToValueAtTime(0.18, t + 0.012);
+      g.gain.exponentialRampToValueAtTime(0.0001, t + 0.22);
+      osc.start(t);
+      osc.stop(t + 0.24);
+    });
+  } catch (e) { /* 音频失败静默 */ }
+}
+
 // ============ 带种子的洗牌算法（Fisher-Yates + 种子）============
 function seededShuffle(array, seed) {
   // 简单的种子随机数生成器（mulberry32）
@@ -1385,7 +1649,13 @@ function seededShuffle(array, seed) {
 
 // ============ 关卡配置 ============
 function getLevelConfig(lv) {
-  // 起始关 5 色，逐关加色，封顶 7 种
+  const endless = lv > MAIN_LINE_END;
+  if (endless) {
+    // 无尽模式：色数 2~7 完全随机；步数上限在 initLevel 里按 filledTubes 动态计算（双管同色时块更多）
+    const colorCount = 2 + Math.floor(Math.random() * 6);
+    return { colorCount, tubeCount: colorCount + 2, hard: true, targetSteps: 0, endless: true };
+  }
+  // 主线：起始关 5 色，逐关加色，封顶 7 种
   const colorCount = Math.min(4 + lv, COLORS.length);
   // 无论简单/困难模式都固定 2 支空管——空管数量影响可解性，不动它
   // 困难模式难度完全由 targetSteps（步数限制）体现
@@ -1394,7 +1664,7 @@ function getLevelConfig(lv) {
   const tubeCount = colorCount + emptyTubes;
   // 困难模式动态步数上限：颜色数 × 4（7 色 → 28 步）
   const targetSteps = hard ? colorCount * 4 : 0;
-  return { colorCount, tubeCount, hard, targetSteps };
+  return { colorCount, tubeCount, hard, targetSteps, endless: false };
 }
 
 // ============ 关卡退场：所有果冻从底部开始向上"融化"（节奏收尾） ============
@@ -1433,7 +1703,8 @@ function meltAway(done) {
 
 // ============ 初始化关卡 ============
 // resume: 可选，从存档恢复时传入 { tubes, steps, targetSteps }
-function initLevel(lv, resume) {
+// keepCache: 无尽模式"重开这局"时为 true，复用缓存的初始盘面；选关/进下一关为 false，重新随机
+function initLevel(lv, resume, keepCache) {
   resetLoveTimer();
   clearTimeout(idleBlinkTimer);
   cleanStreak = 0;   // 换关/重开重置连击彩蛋计数
@@ -1441,6 +1712,7 @@ function initLevel(lv, resume) {
   // 失败弹窗自身没有任何移除路径，不清就会永久挂在屏上挡住新盘面
   document.querySelectorAll('.win-overlay, .confetti').forEach(el => el.remove());
   level = lv;
+  endlessMode = lv > MAIN_LINE_END;   // 无尽模式由关卡编号派生，保持与存档一致
   selected = null;
   isAnimating = false;
   isEntering = false;
@@ -1451,22 +1723,85 @@ function initLevel(lv, resume) {
 
   // 无论固定关卡还是随机生成，先取配置拿到 targetSteps
   const cfg = getLevelConfig(lv);
+  if (!cfg.endless) endlessCache = null;   // 离开无尽关时清掉缓存，避免选关回到旧无尽关时误复用
 
   if (resume && Array.isArray(resume.tubes)) {
     // 从存档恢复：直接用存档里的 tubes / steps / targetSteps
     tubes = resume.tubes;
     steps = resume.steps || 0;
     targetSteps = resume.targetSteps || cfg.targetSteps;
+    // 读档时把无尽初始盘面缓存也带上，保证"重开这局"能还原到初始状态
+    if (cfg.endless && resume.endlessCache && resume.endlessCache.level === lv) {
+      endlessCache = resume.endlessCache;
+    }
   } else {
     steps = 0;
     targetSteps = cfg.targetSteps;
 
-    if (typeof LEVELS !== 'undefined' && LEVELS[lv - 1]) {
+    if (cfg.endless) {
+      // —— 无尽模式：重开复用缓存盘面，进新关才重新随机 ——
+      const { colorCount } = cfg;
+
+      if (keepCache && endlessCache && endlessCache.level === lv) {
+        // 重开：还原同一盘初始布局，步数归零，不重新随机
+        tubes = endlessCache.tubes.map(t => [...t]);
+        targetSteps = endlessCache.targetSteps;
+      } else {
+        // 新关：随机生成盘面 + 步数，并写入缓存
+        // 双管同色：30% 概率，抽 1 种颜色生成 8 块（占 2 管），其余各色 4 块
+        const dual = Math.random() < 0.3;
+        const dualColor = dual ? COLORS[Math.floor(Math.random() * colorCount)] : null;
+        const filledTubes = dual ? (colorCount - 1) + 2 : colorCount;   // 双管色占 2 管，其余各 1 管
+        const tubeCount = filledTubes + 2;                              // 始终 2 支空管
+
+        const pool = [];
+        if (dual) {
+          for (let i = 0; i < TUBE_CAP * 2; i++) pool.push(dualColor);            // 8 块双管色
+          for (let c = 0; c < colorCount; c++) {
+            if (COLORS[c] === dualColor) continue;
+            for (let i = 0; i < TUBE_CAP; i++) pool.push(COLORS[c]);
+          }
+        } else {
+          for (let c = 0; c < colorCount; c++) {
+            for (let i = 0; i < TUBE_CAP; i++) pool.push(COLORS[c]);
+          }
+        }
+
+        // 用 Math.random 洗牌（不固定种子，每局都不一样）
+        for (let i = pool.length - 1; i > 0; i--) {
+          const j = Math.floor(Math.random() * (i + 1));
+          [pool[i], pool[j]] = [pool[j], pool[i]];
+        }
+
+        tubes = [];
+        let idx = 0;
+        for (let i = 0; i < tubeCount; i++) {
+          if (i < filledTubes) {
+            tubes.push(pool.slice(idx, idx + TUBE_CAP));
+            idx += TUBE_CAP;
+          } else {
+            tubes.push([]);
+          }
+        }
+
+        // 步数上限按"装满的试管数"算（双管同色时多一管，预算相应增加），
+        // 乘数 5~7 给足余量，保证常规玩法能过，同时保留一点压迫感
+        targetSteps = filledTubes * (5 + Math.floor(Math.random() * 3));
+
+        endlessCache = {
+          level: lv,
+          tubes: tubes.map(t => [...t]),
+          targetSteps,
+          colorCount
+        };
+      }
+
+    } else if (typeof LEVELS !== 'undefined' && LEVELS[lv - 1]) {
       // 固定关卡：直接读 LEVELS，数字编号 → 颜色字符串
       const numToColor = (n) => COLORS[n - 1];
       tubes = LEVELS[lv - 1].map((tube) => tube.map(numToColor));
     } else {
-      // 超过固定关卡范围，退回到 seededShuffle 随机生成
+      // 超过固定关卡范围（主线 11-15），退回到 seededShuffle 随机生成（可复现）
       const { colorCount, tubeCount } = cfg;
 
       const pool = [];
@@ -1504,7 +1839,13 @@ function updateStepsUI() {
   if (!bar) return;
   bar.classList.toggle('hard', targetSteps > 0);   // 困难模式橙色样式
 
-  if (targetSteps > 0) {
+  if (endlessMode) {
+    // 无尽模式：显示当前是无尽第几关 + 色数 + 剩余步数
+    const endlessLv = level - MAIN_LINE_END;
+    const remaining = targetSteps - steps;
+    bar.innerHTML = `♾️ 无尽模式 · 第 ${endlessLv} 关　🐾 ${colorCount} 色　剩余 ${remaining} / ${targetSteps}`;
+    bar.classList.toggle('danger', remaining <= 5);
+  } else if (targetSteps > 0) {
     // 困难模式：只显示剩余步数
     const remaining = targetSteps - steps;
     bar.innerHTML = `第 ${level} 关 · 困难模式　🐾 剩余 ${remaining} / ${targetSteps}`;
@@ -1515,6 +1856,11 @@ function updateStepsUI() {
     const starsHtml = renderStarMeter(liveStars);
     bar.innerHTML = `第 ${level} 关 · 简单模式　🐾 已走 ${steps} 步　${starsHtml}`;
     bar.classList.remove('danger');
+  }
+
+  // 已通关且弹窗被关闭后：给玩家明确的下一步指引，避免对着空盘面发愣
+  if (gameOver) {
+    bar.innerHTML += `　<span class="clear-hint">🎉 已通关 · 去选关或重开</span>`;
   }
 }
 
@@ -1957,7 +2303,19 @@ async function tryPour(from, to) {
       toEl.classList.add('gold-glow');
       setTimeout(() => toEl.classList.remove('gold-glow'), 1000);
       spawnHearts(toEl, 4);   // 管口喷 4 个爱心
-      playClip(purrAudio, 0.5);   // 归类庆祝：呼噜音量拉到 0.5，和撸猫的 0.2 区分开
+      playCompleteChime();   // 归类庆祝：合成上行"叮咚"三连音，避免 MP3 单调复读
+      // —— 满管快乐抖动：4 只猫整齐地像软糖一样颤两下（scale 弹跳 + 微扭）——
+      // 用 Web Animations API 直接作用在每只猫的 .layer 上，不覆盖 .gold-glow 的 filter 动画
+      toEl.querySelectorAll('.layer').forEach((lyr, li) => {
+        lyr.animate([
+          { transform: 'scale(1, 1) rotate(0deg)' },
+          { transform: 'scale(1.12, 0.92) rotate(-3deg)', offset: 0.20 },   /* 压扁左歪 */
+          { transform: 'scale(0.92, 1.12) rotate(3deg)',  offset: 0.42 },   /* 弹高右歪 */
+          { transform: 'scale(1.08, 0.95) rotate(-1.5deg)', offset: 0.62 }, /* 再压 */
+          { transform: 'scale(0.98, 1.04) rotate(1deg)',  offset: 0.80 },   /* 再弹 */
+          { transform: 'scale(1, 1) rotate(0deg)' }
+        ], { duration: 520, delay: li * 40, easing: 'ease-out' });   /* 从下到上 40ms 错峰，像波浪 */
+      });
     } else if (toEl && baseLayers >= 2 && Math.random() < 0.30) {
       // 被压在最底下的那只猫，30% 概率露出 >_< 委屈脸
       const bottomFace = toEl.firstElementChild?.querySelector('.face');
@@ -2072,13 +2430,16 @@ async function tryPour(from, to) {
 
     // 打击感三段式：瞬间压扁 → 保持 50ms（顿帧）→ 强力过冲回弹
     // 压扁幅度随重量：scale(1.12, 0.85) 轻 → scale(1.25, 0.70) 满管
+    // 落地瞬间叠加 skewX 横向拉伸（软糖感）：砸实的一刻向两侧"流"开，回弹时收回
     const sx = 1.12 + wT * 0.13;
     const sy = 0.85 - wT * 0.15;
+    const skewAmp = 6 + wT * 6;   // 横向拉伸幅度：6°（轻）→ 12°（满管）
+    const skewDir = Math.random() < 0.5 ? 1 : -1;   /* 随机左/右歪，避免机械感 */
     layer.animate([
-      { transform: `scale(${sx.toFixed(3)}, ${sy.toFixed(3)})`, offset: 0 },
-      { transform: `scale(${sx.toFixed(3)}, ${sy.toFixed(3)})`, offset: 0.18, easing: 'cubic-bezier(0.34, 1.56, 0.64, 1)' },
-      { transform: 'scale(0.95, 1.06)', offset: 0.62, easing: 'ease-out' },
-      { transform: 'scale(1, 1)', offset: 1 }
+      { transform: `scale(${sx.toFixed(3)}, ${sy.toFixed(3)}) skewX(${skewDir * skewAmp}deg)`, offset: 0 },
+      { transform: `scale(${sx.toFixed(3)}, ${sy.toFixed(3)}) skewX(${skewDir * skewAmp}deg)`, offset: 0.18, easing: 'cubic-bezier(0.34, 1.56, 0.64, 1)' },
+      { transform: `scale(0.95, 1.06) skewX(${-skewDir * skewAmp * 0.4}deg)`, offset: 0.62, easing: 'ease-out' },
+      { transform: 'scale(1, 1) skewX(0deg)', offset: 1 }
     ], { duration: 280, easing: 'linear' });   // 280ms × 0.18 ≈ 50ms 顿帧保持
 
     // 落地开心脸：这块小猫变成 >ω< 眯眼开心 300ms
@@ -2120,6 +2481,13 @@ function checkWin(lastDone) {
   gameOver = true;   // 赢了也锁定，防止继续倒水
   setBestSteps(level, steps);   // 更新本关最佳步数（只保留更小的）
   if (targetSteps === 0) setStars(level, calcStars(steps));   // 仅简单模式存历史最高星
+
+  // 解锁下一关：取最大值，永不回退（选关只覆盖当前 level，不会污染这里）
+  const unlocked = level + 1;
+  if (unlocked > maxUnlockedLevel) {
+    maxUnlockedLevel = unlocked;
+    saveMaxLevel();
+  }
 
   // —— 通关连锁庆祝：一管一管点亮，而不是全部同时"轰"一声 ——
   // 从最后归类完成的那管开始，每隔 200ms 点亮下一管满色管：
@@ -2228,9 +2596,9 @@ function showWinModal() {
 
   const best  = getBestSteps(level);
   const hard  = targetSteps > 0;
-  const modeLabel = hard
-    ? `困难模式 · 目标 ${targetSteps} 步`
-    : `简单模式 · ${colorCount} 色`;
+  const modeLabel = endlessMode
+    ? `♾️ 无尽模式 · 目标 ${targetSteps} 步`
+    : (hard ? `困难模式 · 目标 ${targetSteps} 步` : `简单模式 · ${colorCount} 色`);
 
   let extra = '';
   if (hard) {
@@ -2282,12 +2650,43 @@ function showWinModal() {
     document.body.appendChild(c);
   }
 
-  // 展示 2.2 秒后自动进入下一关（让玩家看清星级门槛）
+  // 展示 2.2 秒后进入下一关；若刚通关主线终点（第 15 关），改弹无尽模式入口
   setTimeout(() => {
     overlay.remove();
     document.querySelectorAll('.confetti').forEach(el => el.remove());
-    initLevel(level + 1);
+    if (level === MAIN_LINE_END && !endlessMode) {
+      showEndlessEntryModal();
+    } else {
+      initLevel(level + 1);
+    }
   }, 2200);
+}
+
+// ============ 主线通关 → 无尽模式入口弹窗 ============
+function showEndlessEntryModal() {
+  const overlay = document.createElement('div');
+  overlay.className = 'win-overlay';
+  overlay.innerHTML = `
+    <div class="win-card">
+      <h2>(=^･ｪ･^=) 主线通关啦！</h2>
+      <p>前方是高能的无尽挑战，猫咪种类与限制步数将完全随机。是否进入？</p>
+      <div class="endless-actions">
+        <button class="jelly-btn" id="enterEndlessBtn" type="button">进入无尽模式</button>
+        <button class="btn btn-secondary" id="backToPickerBtn" type="button">退回选关</button>
+      </div>
+    </div>
+  `;
+  document.body.appendChild(overlay);
+
+  overlay.querySelector('#enterEndlessBtn').addEventListener('click', () => {
+    overlay.remove();
+    // 第 16 关起进入无尽：colorCount / targetSteps 全随机
+    initLevel(level + 1);
+  });
+  overlay.querySelector('#backToPickerBtn').addEventListener('click', () => {
+    overlay.remove();
+    showLevelPicker();
+  });
 }
 
 // ============ 选关面板 ============
@@ -2300,21 +2699,41 @@ function showLevelPicker() {
   resetLoveTimer();   // 打开选关面板 → 打断空闲计时
   document.querySelectorAll('.level-picker').forEach(el => el.remove());
 
-  // 最大可选关卡 = 当前关卡（不允许跳到没打过的关卡）
-  const maxPick = level;
-  // 总展示 20 个关卡按钮（前 10 固定 + 后 10 动态）
-  const total = Math.max(20, maxPick);
+  // 最大可选关卡 = 历史最大解锁关卡（不允许跳到没打过的关卡，
+  // 但已通关的关卡永远可选——选关不会覆盖这里，所以不会"回锁"）
+  const maxPick = maxUnlockedLevel;
 
+  // —— 主线关卡：1 ~ MAIN_LINE_END，用 5 列方格网格 ——
   let gridHtml = '';
-  for (let i = 1; i <= total; i++) {
+  for (let i = 1; i <= MAIN_LINE_END; i++) {
     const cls = i === level ? 'level-btn current' : 'level-btn';
     const disabled = i > maxPick ? 'disabled' : '';
-    const s = getStars(i);   // 本关历史最高星
+    const s = getStars(i);
     const starStr = s > 0
       ? Array.from({length: 3}, (_, k) => k < s ? '★' : '☆').join('')
       : '';
     const starHtml = starStr ? `<span class="btn-stars">${starStr}</span>` : '';
     gridHtml += `<button class="${cls}" ${disabled} onclick="gotoLevel(${i})"><span>${i}</span>${starHtml}</button>`;
+  }
+
+  // —— 无尽模式：单个长条卡片，呈现"连续挑战"的感觉 ——
+  // N = 当前无尽进度（已解锁的最高无尽关序号），刚解锁时为 1
+  const endlessN = maxPick - MAIN_LINE_END;
+  let endlessHtml = '';
+  if (endlessN >= 1) {
+    const targetLv = MAIN_LINE_END + endlessN;   // 点击直接跳到当前进度对应的无尽关
+    endlessHtml = `
+      <button class="endless-card" onclick="gotoLevel(${targetLv})">
+        <span class="endless-card-icon">∞</span>
+        <span class="endless-card-text">无尽模式 · 当前挑战第 ${endlessN} 关</span>
+      </button>`;
+  } else {
+    // 还没通关第 15 关：锁定态，不可点击
+    endlessHtml = `
+      <div class="endless-card locked">
+        <span class="endless-card-icon">🔒</span>
+        <span class="endless-card-text">通关第 15 关解锁无尽模式</span>
+      </div>`;
   }
 
   const overlay = document.createElement('div');
@@ -2323,6 +2742,7 @@ function showLevelPicker() {
     <div class="level-picker-card">
       <h3>🐾 选 择 关 卡</h3>
       <div class="level-grid">${gridHtml}</div>
+      ${endlessHtml}
       <button class="level-picker-close" onclick="closeLevelPicker()">关闭</button>
     </div>
   `;
@@ -2336,13 +2756,14 @@ function closeLevelPicker() {
 function gotoLevel(n) {
   closeLevelPicker();
   if (isAnimating || isEntering) return;
+  if (n > maxUnlockedLevel) return;   // 防线：禁止跳到未解锁关卡（按钮已 disabled，此处兜底）
   meltAway(() => initLevel(n));   // 旧盘面先融化，再进新关
 }
 
 // ============ 重开本关 ============
 function restartLevel() {
   if (isAnimating || isEntering) return;
-  meltAway(() => initLevel(level));   // 旧盘面先融化，再重开
+  meltAway(() => initLevel(level, null, true));   // 无尽关：复用缓存盘面，不重新随机
 }
 
 // ============ 撤销一步 ============
@@ -2529,6 +2950,9 @@ function applyUndo() {
 // ============ 启动 ============
 // 优先从存档恢复上次进度，否则从第 1 关开始
 const saved = loadState();
+// 最大解锁关卡：取 localStorage 与存档当前 level 的较大值，
+// 兼容旧存档（没有 MAX_LEVEL_KEY 时用 saved.level 兜底，老玩家不会一夜回锁）
+maxUnlockedLevel = Math.max(loadMaxLevel(), saved ? saved.level : 1);
 if (saved) {
   initLevel(saved.level, { tubes: saved.tubes, steps: saved.steps, targetSteps: saved.targetSteps });
 } else {
@@ -2559,7 +2983,13 @@ document.addEventListener('pointerdown', function unlockAudio() {
     const p = silent.play();
     if (p && p.catch) p.catch(() => {});
   } catch (e) { /* 忽略 */ }
-  // ③ 解锁后立刻移除监听，不干扰后续操作
+  // ④ 移动端：顺手把运动传感器权限要了（iOS 13+ 必须由用户手势触发）。
+  //    老玩家不再弹欢迎弹窗，必须在这里兜底——否则摇一摇对他们永远是死的。
+  //    安卓不需要权限，requestMotionPermission 内部对非 iOS 直接挂监听。
+  if (window.isMobileDevice && window.isMobileDevice()) {
+    try { window.requestMotionPermission && window.requestMotionPermission(); } catch (e) {}
+  }
+  // ⑤ 解锁后立刻移除监听，不干扰后续操作
   document.removeEventListener('pointerdown', unlockAudio);
 }, { once: true });
 </script>
